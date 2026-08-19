@@ -1,0 +1,48 @@
+[importlinter]
+root_package = cyberai
+include_external_packages = True
+
+# -----------------------------------------------------------------------------
+# The architecture is a modular monolith. These contracts are what make the
+# boundaries real: they fail the build instead of relying on code review.
+# -----------------------------------------------------------------------------
+
+[importlinter:contract:layers]
+name = Architectural layers (api -> modules -> platform -> core)
+type = layers
+layers =
+    cyberai.api
+    cyberai.modules
+    cyberai.platform
+    cyberai.core
+exhaustive = false
+
+[importlinter:contract:ai-layers]
+name = Model Gateway sits above Inference Gateway, never the reverse
+type = layers
+layers =
+    cyberai.modules.modelgw
+    cyberai.modules.inference
+
+[importlinter:contract:core-is-pure]
+name = Core kernel must not depend on frameworks or drivers
+type = forbidden
+source_modules =
+    cyberai.core
+forbidden_modules =
+    fastapi
+    starlette
+    sqlalchemy
+    redis
+    asyncpg
+
+[importlinter:contract:no-provider-leakage]
+name = Only inference providers may talk to model vendor SDKs
+type = forbidden
+source_modules =
+    cyberai.api
+    cyberai.core
+    cyberai.platform
+    cyberai.modules.modelgw
+forbidden_modules =
+    cyberai.modules.inference.providers
