@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: cyberai-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cyberai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyberai_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cyberai}
+    volumes:
+      - cyberai-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cyberai} -d ${POSTGRES_DB:-cyberai}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cyberai
+
+  redis:
+    image: redis:7-alpine
+    container_name: cyberai-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - cyberai-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cyberai
+
+  api:
+    build:
+      context: ../../services/api
+      dockerfile: ../../infra/docker/Dockerfile.api
+    container_name: cyberai-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      CYBERAI_ENVIRONMENT: local
+      CYBERAI_DEBUG: "true"
+      CYBERAI_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER:-cyberai}:${POSTGRES_PASSWORD:-cyberai_dev_password}@postgres:5432/${POSTGRES_DB:-cyberai}
+      CYBERAI_REDIS__URL: redis://redis:6379/0
+      CYBERAI_LOGGING__FORMAT: console
+      CYBERAI_LOGGING__LEVEL: DEBUG
+    ports:
+      - "${API_PORT:-8000}:8000"
+    networks:
+      - cyberai
+    command: >
+      sh -c "alembic upgrade head && uvicorn cyberai.main:create_app --factory --host 0.0.0.0 --port 8000 --proxy-headers"
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: ../../infra/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
+    container_name: cyberai-web
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    networks:
+      - cyberai
+
+volumes:
+  cyberai-postgres-data:
+  cyberai-redis-data:
+
+networks:
+  cyberai:
+    driver: bridge
