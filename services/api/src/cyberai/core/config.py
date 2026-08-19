@@ -60,6 +60,10 @@ class LoggingSettings(BaseModel):
     silent_paths: list[str] = Field(default_factory=lambda: ["/healthz", "/readyz", "/metrics"])
 
 
+class AuthSettings(BaseModel):
+    jwt_secret: str = "cyberai_dev_jwt_secret_do_not_use_in_prod"  # noqa: S105
+
+
 class DatabaseSettings(BaseModel):
     url: str = "postgresql+asyncpg://cyberai:cyberai_dev_password@localhost:5432/cyberai"
     pool_size: Annotated[int, Field(ge=1, le=100)] = 10
@@ -159,6 +163,7 @@ class Settings(BaseSettings):
     inference: InferenceSettings = Field(default_factory=InferenceSettings)
     models: ModelSettings = Field(default_factory=ModelSettings)
     mock: MockProviderSettings = Field(default_factory=MockProviderSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
 
     @model_validator(mode="after")
     def _enforce_deployment_safety(self) -> Self:
@@ -177,6 +182,8 @@ class Settings(BaseSettings):
             problems.append("database.url still points at localhost")
         if any(origin == "*" for origin in self.app.cors_origins):
             problems.append("app.cors_origins must not be a wildcard")
+        if self.auth.jwt_secret == "cyberai_dev_jwt_secret_do_not_use_in_prod":  # noqa: S105
+            problems.append("auth.jwt_secret still contains a development secret")
 
         if problems:
             raise ValueError("; ".join(problems))

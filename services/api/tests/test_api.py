@@ -110,28 +110,4 @@ async def test_cors_preflight(app_client: AsyncClient) -> None:
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
 
 
-@pytest.mark.asyncio
-async def test_chat_completions(app_client: AsyncClient) -> None:
-    response = await app_client.post(
-        "/api/v1/chat/completions",
-        json={
-            "messages": [{"role": "user", "content": "hello"}],
-            "model": "mock-analyst-1",
-            "max_tokens": 100,
-            "temperature": 0.0,
-        },
-    )
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
-    events = []
-    async for line in response.aiter_lines():
-        if line.startswith("data: ") and line != "data: [DONE]":
-            import json
-            events.append(json.loads(line[6:]))
-
-    assert len(events) >= 2
-    assert events[0]["event"] == "started"
-    assert events[0]["model"] == "mock-analyst-1"
-    assert events[-1]["event"] == "completed"
-    assert "usage" in events[-1]

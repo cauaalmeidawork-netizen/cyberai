@@ -16,6 +16,7 @@ dependencies = [
     "alembic>=1.14.0",
     "redis>=5.2.0",
     "structlog>=24.4.0",
+    "pyjwt>=2.8.0",
 ]
 
 [dependency-groups]
@@ -92,7 +93,7 @@ show_error_codes = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["asgi_lifespan.*"]
+module = ["asgi_lifespan.*", "jwt.*"]
 ignore_missing_imports = true
 
 # =============================================================================

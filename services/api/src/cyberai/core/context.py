@@ -101,3 +101,21 @@ def bind_context(
     finally:
         for var, token in reversed(state.tokens):
             var.reset(token)
+
+
+def set_context(
+    *,
+    request_id: str | None = None,
+    trace_id: str | None = None,
+    org_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
+    """Set context values for the current task without a context manager block."""
+    if request_id is not None:
+        _request_id.set(request_id)
+    if trace_id is not None:
+        _trace_id.set(trace_id)
+    if org_id is not None:
+        _org_id.set(org_id)
+    if user_id is not None:
+        _user_id.set(user_id)
