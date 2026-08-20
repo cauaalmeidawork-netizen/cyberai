@@ -6,5 +6,6 @@ makes the runtime replaceable.
 """
 
 from cyberai.modules.inference.providers.mock import MockModelProvider
+from cyberai.modules.inference.providers.openai_compatible import OpenAICompatibleModelProvider
 
-__all__ = ["MockModelProvider"]
+__all__ = ["MockModelProvider", "OpenAICompatibleModelProvider"]

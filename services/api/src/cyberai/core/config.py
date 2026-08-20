@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from cyberai.core.errors import ConfigurationError
@@ -142,6 +142,37 @@ class MockProviderSettings(BaseModel):
     words_per_chunk: Annotated[int, Field(ge=1, le=50)] = 4
 
 
+class OpenAICompatibleProviderSettings(BaseModel):
+    """Settings for a real chat-completions-compatible provider."""
+
+    enabled: bool = False
+    api_key: SecretStr | None = None
+    base_url: str = "https://api.openai.com/v1"
+    model: str = "gpt-4o-mini"
+    model_key: str = "openai-compatible-chat"
+    display_name: str = "OpenAI-Compatible Chat"
+    context_window: Annotated[int, Field(gt=0)] = 128_000
+    max_output_tokens: Annotated[int, Field(gt=0)] = 16_384
+    connect_timeout_seconds: Annotated[float, Field(gt=0)] = 10.0
+    request_timeout_seconds: Annotated[float, Field(gt=0)] = 60.0
+
+    @field_validator("base_url")
+    @classmethod
+    def _validate_base_url(cls, value: str) -> str:
+        stripped = value.rstrip("/")
+        if not stripped.startswith(("https://", "http://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return stripped
+
+    @model_validator(mode="after")
+    def _validate_enabled_provider(self) -> Self:
+        if self.enabled and self.api_key is None:
+            raise ValueError("api_key is required when openai_compatible.enabled is true")
+        if self.max_output_tokens > self.context_window:
+            raise ValueError("max_output_tokens cannot exceed context_window")
+        return self
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CYBERAI_",
@@ -163,6 +194,9 @@ class Settings(BaseSettings):
     inference: InferenceSettings = Field(default_factory=InferenceSettings)
     models: ModelSettings = Field(default_factory=ModelSettings)
     mock: MockProviderSettings = Field(default_factory=MockProviderSettings)
+    openai_compatible: OpenAICompatibleProviderSettings = Field(
+        default_factory=OpenAICompatibleProviderSettings
+    )
     auth: AuthSettings = Field(default_factory=AuthSettings)
 
     @model_validator(mode="after")

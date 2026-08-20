@@ -10,11 +10,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from decimal import Decimal
 
+from cyberai.core.config import OpenAICompatibleProviderSettings
 from cyberai.modules.modelgw.errors import ModelNotFoundError
 from cyberai.modules.modelgw.types import ModelSpec, TaskType
 
-#: M0 ships only mock models. Real models are added in M4 (commercial provider)
-#: and M11 (self-hosted GPU) without touching any consumer of the catalog.
+#: Mock models are always present so development and CI remain offline.
 DEFAULT_MODELS: tuple[ModelSpec, ...] = (
     ModelSpec(
         key="mock-analyst-1",
@@ -57,6 +57,31 @@ DEFAULT_MODELS: tuple[ModelSpec, ...] = (
 )
 
 
+def _openai_compatible_model(settings: OpenAICompatibleProviderSettings) -> ModelSpec | None:
+    if not settings.enabled:
+        return None
+    return ModelSpec(
+        key=settings.model_key,
+        provider="openai-compatible",
+        provider_model=settings.model,
+        display_name=settings.display_name,
+        description="Environment-configured OpenAI-compatible hosted chat model.",
+        context_window=settings.context_window,
+        max_output_tokens=settings.max_output_tokens,
+        tasks=frozenset(
+            {
+                TaskType.CHAT,
+                TaskType.CODE,
+                TaskType.REASONING,
+                TaskType.SUMMARIZE,
+                TaskType.CLASSIFY,
+            }
+        ),
+        input_cost_per_mtok=Decimal("0"),
+        output_cost_per_mtok=Decimal("0"),
+    )
+
+
 class ModelCatalog:
     """Lookup of the models this deployment can route to."""
 
@@ -94,5 +119,12 @@ class ModelCatalog:
         return len(self._models)
 
 
-def default_catalog() -> ModelCatalog:
-    return ModelCatalog(DEFAULT_MODELS)
+def default_catalog(
+    *, openai_compatible: OpenAICompatibleProviderSettings | None = None
+) -> ModelCatalog:
+    models = list(DEFAULT_MODELS)
+    if openai_compatible is not None:
+        real_model = _openai_compatible_model(openai_compatible)
+        if real_model is not None:
+            models.append(real_model)
+    return ModelCatalog(models)

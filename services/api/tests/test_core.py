@@ -15,6 +15,16 @@ def test_environment_is_local_by_default() -> None:
     assert settings.environment == Environment.LOCAL
 
 
+def test_openai_compatible_provider_is_disabled_by_default() -> None:
+    settings = Settings()
+    assert settings.openai_compatible.enabled is False
+
+
+def test_openai_compatible_provider_requires_api_key_when_enabled() -> None:
+    with pytest.raises(ValueError, match="api_key is required"):
+        load_settings(openai_compatible={"enabled": True, "api_key": None})
+
+
 def test_database_url_requires_async_driver() -> None:
     with pytest.raises(ValueError, match="asyncpg"):
         load_settings(
