@@ -181,6 +181,15 @@ class BillingSettings(BaseModel):
     user_rate_limit_enabled: bool = False
 
 
+class PolicySettings(BaseModel):
+    """Deterministic security policy behavior."""
+
+    enabled: bool = True
+    profile: Literal["default", "strict", "enterprise"] = "default"
+    abuse_threshold: Annotated[int, Field(ge=1)] = 5
+    abuse_window_seconds: Annotated[int, Field(ge=1)] = 300
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CYBERAI_",
@@ -206,6 +215,7 @@ class Settings(BaseSettings):
         default_factory=OpenAICompatibleProviderSettings
     )
     billing: BillingSettings = Field(default_factory=BillingSettings)
+    policy: PolicySettings = Field(default_factory=PolicySettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
 
     @model_validator(mode="after")

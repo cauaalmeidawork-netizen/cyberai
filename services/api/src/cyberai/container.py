@@ -25,6 +25,8 @@ from cyberai.modules.modelgw import (
     default_catalog,
 )
 from cyberai.modules.orchestrator.service import OrchestratorService
+from cyberai.modules.policy import AbuseTracker, NoopPolicyEngine, PolicyEngine, PolicyProfile
+from cyberai.modules.policy.audit import SecurityAuditRecorder
 from cyberai.observability import PrometheusMetricsRecorder
 from cyberai.platform.cache import RedisCache
 from cyberai.platform.db import Database
@@ -44,6 +46,12 @@ def build_services(settings: Settings) -> Services:
     metrics = PrometheusMetricsRecorder()
     plan_catalog = StaticPlanCatalog()
     billing_repository = BillingRepository(database, plan_catalog, metrics=metrics)
+    policy_engine = PolicyEngine()
+    abuse_tracker = AbuseTracker(
+        threshold=settings.policy.abuse_threshold,
+        window_seconds=settings.policy.abuse_window_seconds,
+    )
+    security_audit_recorder = SecurityAuditRecorder(database, metrics=metrics)
 
     providers = ProviderRegistry([MockModelProvider(settings.mock)])
     if settings.openai_compatible.enabled:
@@ -76,6 +84,10 @@ def build_services(settings: Settings) -> Services:
     orchestrator = OrchestratorService(
         model_gateway,
         limit_enforcer=limit_enforcer if settings.billing.enabled else None,
+        policy_engine=policy_engine if settings.policy.enabled else NoopPolicyEngine(),
+        abuse_tracker=abuse_tracker if settings.policy.enabled else None,
+        security_audit_sink=security_audit_recorder if settings.policy.enabled else None,
+        policy_profile=PolicyProfile(settings.policy.profile),
         metrics=metrics,
     )
 
@@ -97,6 +109,9 @@ def build_services(settings: Settings) -> Services:
         plan_catalog=plan_catalog,
         billing_repository=billing_repository,
         limit_enforcer=limit_enforcer,
+        policy_engine=policy_engine,
+        abuse_tracker=abuse_tracker,
+        security_audit_recorder=security_audit_recorder,
         model_gateway=model_gateway,
         orchestrator=orchestrator,
         metrics=metrics,

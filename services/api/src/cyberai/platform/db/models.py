@@ -195,6 +195,23 @@ class ModelCostModel(Base):
     )
 
 
+class SecurityAuditEventModel(Base):
+    __tablename__ = "security_audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    event_type: Mapped[str] = mapped_column(String(64))
+    policy: Mapped[str] = mapped_column(String(64))
+    rule_id: Mapped[str] = mapped_column(String(128))
+    decision: Mapped[str] = mapped_column(String(32))
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
 class Project(Base):
     __tablename__ = "projects"
 

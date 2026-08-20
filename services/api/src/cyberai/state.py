@@ -13,6 +13,8 @@ from cyberai.modules.billing.repository import BillingRepository
 from cyberai.modules.inference import InferenceGateway, ProviderRegistry
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway, ModelRouter
 from cyberai.modules.orchestrator.service import OrchestratorService
+from cyberai.modules.policy import AbuseTracker, PolicyEngine
+from cyberai.modules.policy.audit import SecurityAuditRecorder
 from cyberai.observability.metrics import MetricsRecorder
 from cyberai.platform.cache import RedisCache
 from cyberai.platform.db import Database
@@ -32,6 +34,9 @@ class Services:
     plan_catalog: StaticPlanCatalog
     billing_repository: BillingRepository
     limit_enforcer: LimitEnforcer
+    policy_engine: PolicyEngine
+    abuse_tracker: AbuseTracker
+    security_audit_recorder: SecurityAuditRecorder
     model_gateway: ModelGateway
     orchestrator: OrchestratorService
     metrics: MetricsRecorder
