@@ -7,7 +7,6 @@ whole object graph by building a different ``Services``.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -16,13 +15,7 @@ from cyberai.core.config import Settings
 from cyberai.modules.inference import InferenceGateway
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway
 from cyberai.modules.orchestrator.service import OrchestratorService
-from cyberai.modules.rag.pipeline import IngestionPipeline
-from cyberai.modules.rag.providers import (
-    MockEmbeddingProvider,
-    PgVectorStore,
-    StandardRetriever,
-)
-from cyberai.modules.rag.service import RagService
+from cyberai.observability.metrics import MetricsRecorder
 from cyberai.platform.cache import RedisCache
 from cyberai.platform.db import Database
 from cyberai.state import Services
@@ -67,17 +60,9 @@ def get_orchestrator(
     return services.orchestrator
 
 
+def get_metrics(services: Annotated[Services, Depends(get_services)]) -> MetricsRecorder:
+    return services.metrics
 
-
-async def get_rag_service(db: DatabaseDep) -> AsyncIterator[RagService]:
-    async with db.session() as session:
-        embeddings = MockEmbeddingProvider()
-        store = PgVectorStore(session)
-        pipeline = IngestionPipeline(embeddings, store)
-        retriever = StandardRetriever(embeddings, store)
-        yield RagService(session, pipeline, retriever)
-
-RagServiceDep = Annotated[RagService, Depends(get_rag_service)]
 
 ServicesDep = Annotated[Services, Depends(get_services)]
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
@@ -87,3 +72,4 @@ ModelCatalogDep = Annotated[ModelCatalog, Depends(get_model_catalog)]
 ModelGatewayDep = Annotated[ModelGateway, Depends(get_model_gateway)]
 InferenceGatewayDep = Annotated[InferenceGateway, Depends(get_inference_gateway)]
 OrchestratorServiceDep = Annotated[OrchestratorService, Depends(get_orchestrator)]
+MetricsDep = Annotated[MetricsRecorder, Depends(get_metrics)]

@@ -12,6 +12,7 @@ the AI Orchestrator above it.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -34,6 +35,8 @@ from cyberai.modules.inference.types import (
     ProviderHealth,
     StreamCompleted,
 )
+from cyberai.observability.metrics import MetricsRecorder, NoopMetricsRecorder
+from cyberai.observability.tracing import record_exception, start_span
 
 logger = get_logger(__name__)
 
@@ -49,9 +52,16 @@ class InferenceTarget:
 class InferenceGateway:
     """Executes inference requests against registered providers."""
 
-    def __init__(self, registry: ProviderRegistry, settings: InferenceSettings) -> None:
+    def __init__(
+        self,
+        registry: ProviderRegistry,
+        settings: InferenceSettings,
+        *,
+        metrics: MetricsRecorder | None = None,
+    ) -> None:
         self._registry = registry
         self._settings = settings
+        self._metrics = metrics or NoopMetricsRecorder()
         self._breakers: dict[str, CircuitBreaker] = {}
         self._semaphores: dict[str, asyncio.Semaphore] = {}
 
@@ -94,59 +104,103 @@ class InferenceGateway:
         provider = self._resolve(target)
         breaker = self._breaker(target.provider)
         if not breaker.allows_request():
+            self._metrics.counter(
+                "inference_errors_total",
+                labels={
+                    "provider": target.provider,
+                    "model": target.provider_model,
+                    "error_type": "circuit_open",
+                },
+            ).add()
             raise CircuitOpenError(provider=target.provider)
 
         settings = self._settings
         saw_completion = False
+        started = time.perf_counter()
+        first_token_at: float | None = None
+        input_tokens = 0
+        output_tokens = 0
+        finish_reason = "unknown"
+        status = "success"
 
-        async with self._semaphore(target.provider):
-            try:
-                loop = asyncio.get_running_loop()
-                # The wait for the first token is budgeted separately: a provider
-                # that accepts the connection and then stalls is the common
-                # failure mode, and a single end-to-end timeout hides it behind
-                # a legitimately long stream.
-                async with asyncio.timeout(settings.first_token_timeout_seconds) as timeout:
-                    first = True
-                    async for event in provider.generate(request):
-                        if first:
-                            timeout.reschedule(loop.time() + settings.request_timeout_seconds)
-                            first = False
-                        if isinstance(event, StreamCompleted):
-                            saw_completion = True
-                        yield event
-            except TimeoutError as exc:
-                breaker.record_failure()
-                logger.warning(
-                    "inference.timeout",
-                    provider=target.provider,
-                    provider_model=target.provider_model,
-                    request_id=request.request_id,
-                )
-                raise ProviderTimeoutError(provider=target.provider) from exc
-            except InferenceError:
-                breaker.record_failure()
-                raise
-            except asyncio.CancelledError:
-                # A client disconnect is not a provider failure.
-                raise
-            except Exception as exc:
-                breaker.record_failure()
-                logger.exception(
-                    "inference.provider_error",
-                    provider=target.provider,
-                    provider_model=target.provider_model,
-                    error=type(exc).__name__,
-                )
-                raise ProviderResponseError(provider=target.provider) from exc
+        labels = {"provider": target.provider, "model": target.provider_model}
+        with start_span(
+            "inference.request", {"ai.provider": target.provider, "ai.model": target.provider_model}
+        ) as span:
+            async with self._semaphore(target.provider):
+                try:
+                    loop = asyncio.get_running_loop()
+                    # The wait for the first token is budgeted separately: a provider
+                    # that accepts the connection and then stalls is the common
+                    # failure mode, and a single end-to-end timeout hides it behind
+                    # a legitimately long stream.
+                    async with asyncio.timeout(settings.first_token_timeout_seconds) as timeout:
+                        first = True
+                        async for event in provider.generate(request):
+                            if first:
+                                first_token_at = time.perf_counter()
+                                timeout.reschedule(loop.time() + settings.request_timeout_seconds)
+                                first = False
+                            if isinstance(event, StreamCompleted):
+                                saw_completion = True
+                                input_tokens = event.usage.input_tokens
+                                output_tokens = event.usage.output_tokens
+                                finish_reason = event.finish_reason.value
+                            yield event
+                except TimeoutError as exc:
+                    status = "timeout"
+                    breaker.record_failure()
+                    self._record_inference_error(labels, "timeout")
+                    logger.warning(
+                        "inference.timeout",
+                        provider=target.provider,
+                        provider_model=target.provider_model,
+                        request_id=request.request_id,
+                    )
+                    record_exception(span, exc, attributes={"error.type": "timeout"})
+                    raise ProviderTimeoutError(provider=target.provider) from exc
+                except InferenceError as exc:
+                    status = "provider_error"
+                    breaker.record_failure()
+                    self._record_inference_error(labels, exc.code)
+                    record_exception(span, exc, attributes={"error.type": exc.code})
+                    raise
+                except asyncio.CancelledError:
+                    # A client disconnect is not a provider failure.
+                    status = "cancelled"
+                    raise
+                except Exception as exc:
+                    status = "provider_error"
+                    breaker.record_failure()
+                    self._record_inference_error(labels, type(exc).__name__)
+                    logger.exception(
+                        "inference.provider_error",
+                        provider=target.provider,
+                        provider_model=target.provider_model,
+                        error=type(exc).__name__,
+                    )
+                    record_exception(span, exc, attributes={"error.type": type(exc).__name__})
+                    raise ProviderResponseError(provider=target.provider) from exc
 
-        if not saw_completion:
-            breaker.record_failure()
-            raise ProviderResponseError(
-                "The inference provider ended the stream without a completion event.",
-                provider=target.provider,
-            )
-        breaker.record_success()
+            if not saw_completion:
+                status = "provider_error"
+                breaker.record_failure()
+                self._record_inference_error(labels, "missing_completion")
+                raise ProviderResponseError(
+                    "The inference provider ended the stream without a completion event.",
+                    provider=target.provider,
+                )
+            breaker.record_success()
+            span.set_attribute("ai.finish_reason", finish_reason)
+        self._record_inference_metrics(
+            labels,
+            status=status,
+            duration_seconds=time.perf_counter() - started,
+            first_token_seconds=(first_token_at - started if first_token_at is not None else None),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            finish_reason=finish_reason,
+        )
 
     # --- internals -----------------------------------------------------------
 
@@ -175,3 +229,33 @@ class InferenceGateway:
             semaphore = asyncio.Semaphore(self._settings.max_concurrent_requests_per_provider)
             self._semaphores[provider_name] = semaphore
         return semaphore
+
+    def _record_inference_error(self, labels: dict[str, str], error_type: str) -> None:
+        self._metrics.counter(
+            "inference_errors_total",
+            labels={**labels, "error_type": error_type},
+        ).add()
+
+    def _record_inference_metrics(
+        self,
+        labels: dict[str, str],
+        *,
+        status: str,
+        duration_seconds: float,
+        first_token_seconds: float | None,
+        input_tokens: int,
+        output_tokens: int,
+        finish_reason: str,
+    ) -> None:
+        metric_labels = {**labels, "status": status, "finish_reason": finish_reason}
+        self._metrics.counter("inference_requests_total", labels=metric_labels).add()
+        self._metrics.histogram("inference_duration_seconds", labels=metric_labels).record(
+            duration_seconds
+        )
+        if first_token_seconds is not None:
+            self._metrics.histogram(
+                "inference_time_to_first_token_seconds",
+                labels=metric_labels,
+            ).record(first_token_seconds)
+        self._metrics.counter("inference_input_tokens_total", labels=labels).add(input_tokens)
+        self._metrics.counter("inference_output_tokens_total", labels=labels).add(output_tokens)

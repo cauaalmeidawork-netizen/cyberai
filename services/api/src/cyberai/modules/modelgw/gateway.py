@@ -43,6 +43,8 @@ from cyberai.modules.modelgw.usage import (
     UsageStatus,
     estimate_cost_usd,
 )
+from cyberai.observability.metrics import MetricsRecorder, NoopMetricsRecorder
+from cyberai.observability.tracing import record_exception, start_span
 
 logger = get_logger(__name__)
 
@@ -55,10 +57,13 @@ class ModelGateway:
         router: ModelRouter,
         inference: InferenceGateway,
         usage_sink: UsageSink | None = None,
+        *,
+        metrics: MetricsRecorder | None = None,
     ) -> None:
         self._router = router
         self._inference = inference
         self._usage_sink: UsageSink = usage_sink or LoggingUsageSink()
+        self._metrics = metrics or NoopMetricsRecorder()
 
     async def stream(self, request: CompletionRequest) -> AsyncIterator[GatewayEvent]:
         """Stream a completion, failing over to the next candidate when safe.
@@ -72,7 +77,35 @@ class ModelGateway:
             NoModelAvailableError: every candidate failed before producing output.
             InferenceError: a candidate failed after output had already been streamed.
         """
-        route = self._router.resolve(request.task, requested_model=request.model_key)
+        routing_started = time.perf_counter()
+        with start_span("model_gateway.route", {"ai.task": request.task.value}) as route_span:
+            try:
+                route = self._router.resolve(request.task, requested_model=request.model_key)
+            except Exception as exc:
+                self._metrics.counter(
+                    "model_gateway_requests_total",
+                    labels={
+                        "task": request.task.value,
+                        "model": "none",
+                        "provider": "none",
+                        "status": "routing_error",
+                    },
+                ).add()
+                record_exception(route_span, exc, attributes={"error.type": type(exc).__name__})
+                raise
+            finally:
+                routing_latency = time.perf_counter() - routing_started
+                self._metrics.histogram(
+                    "model_gateway_duration_seconds",
+                    labels={
+                        "task": request.task.value,
+                        "model": "none",
+                        "provider": "none",
+                        "status": "success",
+                        "phase": "routing",
+                    },
+                ).record(routing_latency)
+            route_span.set_attribute("ai.model.selected", route.primary.key)
         last_error: InferenceError | None = None
 
         for attempt, model in enumerate(route.candidates, start=1):
@@ -86,6 +119,15 @@ class ModelGateway:
             inference_request = self._build_request(request, model)
 
             try:
+                if is_fallback:
+                    self._metrics.counter(
+                        "model_gateway_fallbacks_total",
+                        labels={
+                            "task": request.task.value,
+                            "model": model.key,
+                            "provider": model.provider,
+                        },
+                    ).add()
                 yield CompletionStarted(
                     model_key=model.key,
                     provider=model.provider,
@@ -104,6 +146,15 @@ class ModelGateway:
                         finish_reason = event.finish_reason
 
             except InferenceError as exc:
+                self._metrics.counter(
+                    "model_gateway_requests_total",
+                    labels={
+                        "task": request.task.value,
+                        "model": model.key,
+                        "provider": model.provider,
+                        "status": "failed",
+                    },
+                ).add()
                 await self._emit_usage(
                     request,
                     model,
@@ -162,8 +213,36 @@ class ModelGateway:
                 usage=usage,
                 record=record,
             )
+            self._metrics.counter(
+                "model_gateway_requests_total",
+                labels={
+                    "task": request.task.value,
+                    "model": model.key,
+                    "provider": model.provider,
+                    "status": "success",
+                },
+            ).add()
+            self._metrics.histogram(
+                "model_gateway_duration_seconds",
+                labels={
+                    "task": request.task.value,
+                    "model": model.key,
+                    "provider": model.provider,
+                    "status": "success",
+                    "phase": "completion",
+                },
+            ).record(time.perf_counter() - started)
             return
 
+        self._metrics.counter(
+            "model_gateway_requests_total",
+            labels={
+                "task": request.task.value,
+                "model": "none",
+                "provider": "none",
+                "status": "no_model_available",
+            },
+        ).add()
         raise NoModelAvailableError(
             "Every candidate model failed to serve this request."
         ) from last_error

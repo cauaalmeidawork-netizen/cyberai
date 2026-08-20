@@ -18,10 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     # 1. Add content_hash to documents
-    op.add_column(
-        "documents",
-        sa.Column("content_hash", sa.String(length=64), nullable=True)
-    )
+    op.add_column("documents", sa.Column("content_hash", sa.String(length=64), nullable=True))
     # Set a dummy hash for existing rows if any, then make it NOT NULL
     op.execute("UPDATE documents SET content_hash = 'legacy' WHERE content_hash IS NULL")
     op.alter_column("documents", "content_hash", nullable=False)
@@ -37,7 +34,7 @@ def upgrade() -> None:
         "documents",
         ["document_id"],
         ["id"],
-        ondelete="CASCADE"
+        ondelete="CASCADE",
     )
 
 
@@ -45,11 +42,7 @@ def downgrade() -> None:
     # 1. Revert CASCADE on chunks.document_id
     op.drop_constraint("fk_chunks_document_id_documents", "chunks", type_="foreignkey")
     op.create_foreign_key(
-        "fk_chunks_document_id_documents",
-        "chunks",
-        "documents",
-        ["document_id"],
-        ["id"]
+        "fk_chunks_document_id_documents", "chunks", "documents", ["document_id"], ["id"]
     )
 
     # 2. Remove content_hash from documents

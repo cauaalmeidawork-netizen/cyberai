@@ -11,6 +11,7 @@ from cyberai.core.config import Settings
 from cyberai.modules.inference import InferenceGateway, ProviderRegistry
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway, ModelRouter
 from cyberai.modules.orchestrator.service import OrchestratorService
+from cyberai.observability.metrics import MetricsRecorder
 from cyberai.platform.cache import RedisCache
 from cyberai.platform.db import Database
 
@@ -28,3 +29,4 @@ class Services:
     router: ModelRouter
     model_gateway: ModelGateway
     orchestrator: OrchestratorService
+    metrics: MetricsRecorder

@@ -18,14 +18,12 @@ from cyberai.modules.modelgw import (
     default_catalog,
 )
 from cyberai.modules.orchestrator.service import OrchestratorService
+from cyberai.observability import PrometheusMetricsRecorder
 from cyberai.platform.cache import RedisCache
 from cyberai.platform.db import Database
 from cyberai.state import Services as Services
 
 logger = get_logger(__name__)
-
-
-
 
 
 def build_services(settings: Settings) -> Services:
@@ -37,14 +35,15 @@ def build_services(settings: Settings) -> Services:
     """
     database = Database(settings.database)
     cache = RedisCache(settings.redis)
+    metrics = PrometheusMetricsRecorder()
 
     providers = ProviderRegistry([MockModelProvider(settings.mock)])
-    inference_gateway = InferenceGateway(providers, settings.inference)
+    inference_gateway = InferenceGateway(providers, settings.inference, metrics=metrics)
 
     catalog = default_catalog()
     router = ModelRouter(catalog, settings.models)
-    model_gateway = ModelGateway(router, inference_gateway, LoggingUsageSink())
-    orchestrator = OrchestratorService(model_gateway)
+    model_gateway = ModelGateway(router, inference_gateway, LoggingUsageSink(), metrics=metrics)
+    orchestrator = OrchestratorService(model_gateway, metrics=metrics)
 
     logger.info(
         "services.wired",
@@ -63,6 +62,7 @@ def build_services(settings: Settings) -> Services:
         router=router,
         model_gateway=model_gateway,
         orchestrator=orchestrator,
+        metrics=metrics,
     )
 
 

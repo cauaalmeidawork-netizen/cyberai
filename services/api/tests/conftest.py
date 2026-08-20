@@ -49,9 +49,7 @@ async def test_org(db: Database) -> AsyncIterator[Organization]:
 
 
 @pytest.fixture
-async def test_user(
-    db: Database, test_org: Organization
-) -> AsyncIterator[User]:
+async def test_user(db: Database, test_org: Organization) -> AsyncIterator[User]:
     suffix = uuid4().hex[:8]
     user = User(
         org_id=test_org.id,
@@ -71,9 +69,7 @@ async def test_user(
 
 
 @pytest.fixture
-async def test_project(
-    db: Database, test_org: Organization
-) -> AsyncIterator[Project]:
+async def test_project(db: Database, test_org: Organization) -> AsyncIterator[Project]:
     suffix = uuid4().hex[:8]
     project = Project(
         org_id=test_org.id,

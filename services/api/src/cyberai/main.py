@@ -19,6 +19,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from cyberai.api.errors import register_exception_handlers
 from cyberai.api.health import router as health_router
+from cyberai.api.metrics import router as metrics_router
 from cyberai.api.middleware import (
     AccessLogMiddleware,
     RequestContextMiddleware,
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(v1_router)
 
     return app

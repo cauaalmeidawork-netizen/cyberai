@@ -55,9 +55,7 @@ async def get_current_user(
         ) from None
 
     async with db.session() as session:
-        result = await session.execute(
-            select(User).where(User.id == user_id, User.is_active)
-        )
+        result = await session.execute(select(User).where(User.id == user_id, User.is_active))
         user = result.scalar_one_or_none()
 
     if not user:

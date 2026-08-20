@@ -116,9 +116,7 @@ async def stream_conversation_messages(
         request_id=ctx.request_id,
     )
 
-    messages = tuple(
-        InferenceMessage(role=m.role, content=m.content) for m in payload.messages
-    )
+    messages = tuple(InferenceMessage(role=m.role, content=m.content) for m in payload.messages)
 
     async def _stream() -> AsyncIterator[str]:
         assistant_content = ""

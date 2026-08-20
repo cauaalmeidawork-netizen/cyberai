@@ -22,8 +22,6 @@ async def _skip_if_no_postgres() -> bool:
     return ok
 
 
-
-
 @pytest.mark.asyncio
 async def test_tenant_context_applied_within_transaction(db: Database) -> None:
     if not await _skip_if_no_postgres():

@@ -91,6 +91,3 @@ async def test_cors_preflight(app_client: AsyncClient) -> None:
     assert response.status_code == 200
     assert "access-control-allow-origin" in response.headers
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
-
-
-
