@@ -9,10 +9,17 @@ from __future__ import annotations
 
 from cyberai.core.config import Settings
 from cyberai.core.logging import get_logger
+from cyberai.modules.billing import (
+    EntitlementService,
+    LimitEnforcer,
+    ProviderTokenEstimator,
+    StaticPlanCatalog,
+)
+from cyberai.modules.billing.redis_rate_limit import RedisRateLimiter
+from cyberai.modules.billing.repository import BillingRepository, PersistentUsageSink
 from cyberai.modules.inference import InferenceGateway, ProviderRegistry
 from cyberai.modules.inference.providers import MockModelProvider, OpenAICompatibleModelProvider
 from cyberai.modules.modelgw import (
-    LoggingUsageSink,
     ModelGateway,
     ModelRouter,
     default_catalog,
@@ -35,6 +42,8 @@ def build_services(settings: Settings) -> Services:
     database = Database(settings.database)
     cache = RedisCache(settings.redis)
     metrics = PrometheusMetricsRecorder()
+    plan_catalog = StaticPlanCatalog()
+    billing_repository = BillingRepository(database, plan_catalog, metrics=metrics)
 
     providers = ProviderRegistry([MockModelProvider(settings.mock)])
     if settings.openai_compatible.enabled:
@@ -43,8 +52,32 @@ def build_services(settings: Settings) -> Services:
 
     catalog = default_catalog(openai_compatible=settings.openai_compatible)
     router = ModelRouter(catalog, settings.models)
-    model_gateway = ModelGateway(router, inference_gateway, LoggingUsageSink(), metrics=metrics)
-    orchestrator = OrchestratorService(model_gateway, metrics=metrics)
+    token_estimator = ProviderTokenEstimator(catalog, inference_gateway)
+    rate_limiter = RedisRateLimiter(
+        cache.client,
+        fail_open=settings.billing.rate_limit_fail_open,
+    )
+    limit_enforcer = LimitEnforcer(
+        plan_catalog=plan_catalog,
+        entitlement_service=EntitlementService(plan_catalog),
+        quota_store=billing_repository,
+        rate_limiter=rate_limiter,
+        token_estimator=token_estimator,
+        subscription_provider=billing_repository,
+        default_model_key=settings.models.default_model,
+        metrics=metrics,
+    )
+    model_gateway = ModelGateway(
+        router,
+        inference_gateway,
+        PersistentUsageSink(billing_repository),
+        metrics=metrics,
+    )
+    orchestrator = OrchestratorService(
+        model_gateway,
+        limit_enforcer=limit_enforcer if settings.billing.enabled else None,
+        metrics=metrics,
+    )
 
     logger.info(
         "services.wired",
@@ -61,6 +94,9 @@ def build_services(settings: Settings) -> Services:
         inference_gateway=inference_gateway,
         catalog=catalog,
         router=router,
+        plan_catalog=plan_catalog,
+        billing_repository=billing_repository,
+        limit_enforcer=limit_enforcer,
         model_gateway=model_gateway,
         orchestrator=orchestrator,
         metrics=metrics,

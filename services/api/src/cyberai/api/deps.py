@@ -12,6 +12,8 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from cyberai.core.config import Settings
+from cyberai.modules.billing import StaticPlanCatalog
+from cyberai.modules.billing.repository import BillingRepository
 from cyberai.modules.inference import InferenceGateway
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway
 from cyberai.modules.orchestrator.service import OrchestratorService
@@ -64,6 +66,16 @@ def get_metrics(services: Annotated[Services, Depends(get_services)]) -> Metrics
     return services.metrics
 
 
+def get_billing_repository(
+    services: Annotated[Services, Depends(get_services)],
+) -> BillingRepository:
+    return services.billing_repository
+
+
+def get_plan_catalog(services: Annotated[Services, Depends(get_services)]) -> StaticPlanCatalog:
+    return services.plan_catalog
+
+
 ServicesDep = Annotated[Services, Depends(get_services)]
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
@@ -73,3 +85,5 @@ ModelGatewayDep = Annotated[ModelGateway, Depends(get_model_gateway)]
 InferenceGatewayDep = Annotated[InferenceGateway, Depends(get_inference_gateway)]
 OrchestratorServiceDep = Annotated[OrchestratorService, Depends(get_orchestrator)]
 MetricsDep = Annotated[MetricsRecorder, Depends(get_metrics)]
+BillingRepositoryDep = Annotated[BillingRepository, Depends(get_billing_repository)]
+PlanCatalogDep = Annotated[StaticPlanCatalog, Depends(get_plan_catalog)]

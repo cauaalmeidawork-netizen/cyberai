@@ -173,6 +173,14 @@ class OpenAICompatibleProviderSettings(BaseModel):
         return self
 
 
+class BillingSettings(BaseModel):
+    """Usage limits and rate-limiter behavior."""
+
+    enabled: bool = True
+    rate_limit_fail_open: bool = True
+    user_rate_limit_enabled: bool = False
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CYBERAI_",
@@ -197,6 +205,7 @@ class Settings(BaseSettings):
     openai_compatible: OpenAICompatibleProviderSettings = Field(
         default_factory=OpenAICompatibleProviderSettings
     )
+    billing: BillingSettings = Field(default_factory=BillingSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
 
     @model_validator(mode="after")

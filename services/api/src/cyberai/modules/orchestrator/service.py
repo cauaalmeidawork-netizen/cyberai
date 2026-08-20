@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator
+from typing import Protocol
 
 from cyberai.core.logging import get_logger
+from cyberai.modules.billing.enforcement import NoopLimitEnforcer
 from cyberai.modules.inference.types import Message, Role
-from cyberai.modules.modelgw.gateway import ModelGateway
 from cyberai.modules.modelgw.types import (
     CompletionRequest,
     GatewayEvent,
@@ -25,16 +26,42 @@ from cyberai.observability.tracing import record_exception, start_span
 logger = get_logger(__name__)
 
 
+class _Gateway(Protocol):
+    def stream(self, request: CompletionRequest) -> AsyncIterator[GatewayEvent]: ...
+
+
+class _LimitEnforcer(Protocol):
+    async def check_entitlements(
+        self,
+        *,
+        principal: RequestPrincipal,
+        requested_model: str | None,
+        rag_enabled: bool,
+    ) -> object: ...
+
+    async def reserve_for_request(
+        self,
+        *,
+        principal: RequestPrincipal,
+        messages: tuple[Message, ...],
+        requested_model: str | None,
+        max_output_tokens: int,
+        rag_enabled: bool,
+    ) -> object: ...
+
+
 class OrchestratorService:
     """The central brain for AI operations."""
 
     def __init__(
         self,
-        model_gateway: ModelGateway,
+        model_gateway: _Gateway,
         *,
+        limit_enforcer: _LimitEnforcer | None = None,
         metrics: MetricsRecorder | None = None,
     ) -> None:
         self._model_gateway = model_gateway
+        self._limit_enforcer = limit_enforcer or NoopLimitEnforcer()
         self._metrics = metrics or NoopMetricsRecorder()
 
     async def stream_chat(
@@ -59,6 +86,11 @@ class OrchestratorService:
             {"ai.rag_enabled": rag_enabled},
         ) as span:
             try:
+                await self._limit_enforcer.check_entitlements(
+                    principal=principal,
+                    requested_model=model,
+                    rag_enabled=rag_enabled,
+                )
                 if retriever and messages_list:
                     # We assume the last user message is the query for RAG
                     last_msg = messages_list[-1]
@@ -90,6 +122,13 @@ class OrchestratorService:
                                     0, Message(role=Role.SYSTEM, content=rag_prompt)
                                 )
 
+                await self._limit_enforcer.reserve_for_request(
+                    principal=principal,
+                    messages=tuple(messages_list),
+                    requested_model=model,
+                    max_output_tokens=max_tokens,
+                    rag_enabled=rag_enabled,
+                )
                 request = CompletionRequest(
                     messages=tuple(messages_list),
                     task=TaskType.CHAT,

@@ -7,11 +7,13 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cyberai.api.auth import CurrentUserDep
-from cyberai.api.deps import DatabaseDep, MetricsDep
+from cyberai.api.deps import BillingRepositoryDep, DatabaseDep, MetricsDep, PlanCatalogDep
+from cyberai.modules.billing.entitlements import EntitlementService
+from cyberai.modules.billing.errors import EntitlementDeniedError
 from cyberai.modules.rag.pipeline import IngestionPipeline
 from cyberai.modules.rag.providers import MockEmbeddingProvider, PgVectorStore, StandardRetriever
 from cyberai.modules.rag.service import RagService
@@ -94,9 +96,23 @@ async def create_document(
     user: CurrentUserDep,
     db: DatabaseDep,
     metrics: MetricsDep,
+    billing_repository: BillingRepositoryDep,
+    plan_catalog: PlanCatalogDep,
 ) -> Document:
     """Upload and ingest a new document."""
     await verify_project_access(db, project_id, user)
+    subscription = await billing_repository.get_subscription(user.org_id)
+    document_count_stmt = (
+        select(func.count()).select_from(Document).where(Document.org_id == user.org_id)
+    )
+    async with db.session(TenantContext(org_id=user.org_id)) as session:
+        current_documents = await session.scalar(document_count_stmt) or 0
+    decision = EntitlementService(plan_catalog).can_ingest_document(subscription, current_documents)
+    if not decision.allowed:
+        raise EntitlementDeniedError(
+            "Document ingestion is not allowed by the current plan.",
+            extra={"reason": decision.reason},
+        )
 
     try:
         async with db.session(TenantContext(org_id=user.org_id)) as session:

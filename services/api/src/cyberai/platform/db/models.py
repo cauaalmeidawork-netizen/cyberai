@@ -13,7 +13,17 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Uuid
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -88,6 +98,99 @@ class UsageRecordModel(Base):
     estimated_cost_usd: Mapped[float] = mapped_column(Numeric(18, 8))
     actual_cost_usd: Mapped[float | None] = mapped_column(Numeric(18, 8))
     occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    __table_args__ = (
+        UniqueConstraint("org_id", "request_id", name="uq_usage_records_org_id_request_id"),
+    )
+
+
+class PlanModel(Base):
+    __tablename__ = "plans"
+
+    key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(128))
+    limits_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class SubscriptionModel(Base):
+    __tablename__ = "subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("organizations.id"), index=True)
+    plan_key: Mapped[str] = mapped_column(String(32), ForeignKey("plans.key"))
+    status: Mapped[str] = mapped_column(String(32), default="active")
+    current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class UsageAggregateModel(Base):
+    __tablename__ = "usage_aggregates"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_requests: Mapped[int] = mapped_column(Integer, default=0)
+    used_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    used_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    used_total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_requests: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    __table_args__ = (
+        UniqueConstraint("org_id", "period_start", name="uq_usage_aggregates_org_period"),
+    )
+
+
+class UsageReservationModel(Base):
+    __tablename__ = "usage_reservations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    request_id: Mapped[str] = mapped_column(String(64))
+    plan_key: Mapped[str] = mapped_column(String(32))
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reserved_input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    __table_args__ = (
+        UniqueConstraint("org_id", "request_id", name="uq_usage_reservations_org_request"),
+    )
+
+
+class ModelCostModel(Base):
+    __tablename__ = "model_costs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    provider: Mapped[str] = mapped_column(String(64), index=True)
+    model: Mapped[str] = mapped_column(String(128), index=True)
+    input_token_unit_cost: Mapped[float] = mapped_column(Numeric(18, 8))
+    output_token_unit_cost: Mapped[float] = mapped_column(Numeric(18, 8))
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 

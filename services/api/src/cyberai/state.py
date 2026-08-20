@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cyberai.core.config import Settings
+from cyberai.modules.billing import LimitEnforcer, StaticPlanCatalog
+from cyberai.modules.billing.repository import BillingRepository
 from cyberai.modules.inference import InferenceGateway, ProviderRegistry
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway, ModelRouter
 from cyberai.modules.orchestrator.service import OrchestratorService
@@ -27,6 +29,9 @@ class Services:
     inference_gateway: InferenceGateway
     catalog: ModelCatalog
     router: ModelRouter
+    plan_catalog: StaticPlanCatalog
+    billing_repository: BillingRepository
+    limit_enforcer: LimitEnforcer
     model_gateway: ModelGateway
     orchestrator: OrchestratorService
     metrics: MetricsRecorder
