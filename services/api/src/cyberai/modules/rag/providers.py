@@ -53,7 +53,7 @@ class PgVectorStore(VectorStore):
     async def add_chunks(self, chunks: list[Chunk]) -> None:
         """Add chunks to the database."""
         self.session.add_all(chunks)
-        await self.session.commit()
+        await self.session.flush()
 
     async def search(self, query_vector: list[float], top_k: int = 3) -> list[RetrievedChunk]:
         """Search chunks using pgvector cosine distance (<=>).

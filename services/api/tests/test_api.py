@@ -2,27 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
-from asgi_lifespan import LifespanManager
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
-
-from cyberai.main import create_app
-
-
-@pytest.fixture
-async def app_client() -> AsyncIterator[AsyncClient]:
-    app: FastAPI = create_app()
-    async with (
-        LifespanManager(app) as manager,
-        AsyncClient(
-            transport=ASGITransport(app=manager.app), base_url="http://testserver"
-        ) as client,
-    ):
-        yield client
+from httpx import AsyncClient
 
 
 @pytest.mark.asyncio

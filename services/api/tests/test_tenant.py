@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import pytest
@@ -23,12 +22,6 @@ async def _skip_if_no_postgres() -> bool:
     return ok
 
 
-@pytest.fixture
-async def db() -> AsyncIterator[Database]:
-    settings = DatabaseSettings()
-    database = DatabaseEngine(settings)
-    yield database
-    await database.dispose()
 
 
 @pytest.mark.asyncio

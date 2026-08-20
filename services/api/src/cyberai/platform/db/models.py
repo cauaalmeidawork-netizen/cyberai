@@ -150,6 +150,7 @@ class Document(Base):
     org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
     project_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("projects.id"), index=True)
     title: Mapped[str] = mapped_column(String(255))
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
     source_type: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default="pending")
     created_at: Mapped[datetime] = mapped_column(
@@ -162,7 +163,9 @@ class Chunk(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
     org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
-    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id"), index=True)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
     content: Mapped[str] = mapped_column(String)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384))

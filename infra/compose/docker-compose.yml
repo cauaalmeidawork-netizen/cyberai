@@ -9,7 +9,7 @@ services:
     volumes:
       - cyberai-postgres-data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cyberai} -d ${POSTGRES_DB:-cyberai}"]
       interval: 5s
@@ -22,7 +22,7 @@ services:
     image: redis:7-alpine
     container_name: cyberai-redis
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - cyberai-redis-data:/data
     healthcheck:

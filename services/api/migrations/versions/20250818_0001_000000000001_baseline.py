@@ -20,7 +20,13 @@ depends_on = None
 def upgrade() -> None:
     # Application role that owns tenant-scoped data. The API will connect with a
     # user that has this role so it can set the tenant variable for RLS.
-    op.execute("CREATE ROLE IF NOT EXISTS cyberai_app NOLOGIN;")
+    op.execute(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cyberai_app') THEN "
+        "CREATE ROLE cyberai_app NOLOGIN; "
+        "END IF; "
+        "END $$;"
+    )
     op.execute("GRANT USAGE ON SCHEMA public TO cyberai_app;")
 
     # A small, immutable table storing all known organizations. It has no RLS
