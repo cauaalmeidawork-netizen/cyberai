@@ -6,6 +6,7 @@ from cyberai.api.v1.routers import (
     auth,
     billing,
     conversations,
+    dev_auth,
     documents,
     meta,
     models,
@@ -16,6 +17,7 @@ from cyberai.api.v1.routers import (
 v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(meta.router)
 v1_router.include_router(auth.router)
+v1_router.include_router(dev_auth.router)
 v1_router.include_router(organizations.router)
 v1_router.include_router(models.router)
 v1_router.include_router(projects.router)
