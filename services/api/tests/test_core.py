@@ -6,6 +6,7 @@ import re
 
 import pytest
 
+from cyberai.container import build_services, shutdown_services
 from cyberai.core.config import Environment, Settings, load_settings, mask_credentials
 from cyberai.core.context import bind_context, current_context
 
@@ -54,6 +55,101 @@ def test_deployment_safety_refuses_localhost_database() -> None:
             debug=False,
             logging={"format": "json"},
         )
+
+
+def test_production_refuses_mock_default_model() -> None:
+    with pytest.raises(ValueError, match="mock models are not allowed"):
+        load_settings(
+            environment=Environment.PRODUCTION,
+            debug=False,
+            logging={"format": "json"},
+            database={"url": "postgresql+asyncpg://cyberai:strong-secret@db.internal/cyberai"},
+            redis={"url": "redis://redis.internal:6379/0"},
+            auth={"jwt_secret": "prod-jwt-secret-with-enough-entropy"},
+            app={
+                "cors_origins": ["https://app.cyberai.example"],
+                "trusted_hosts": ["api.cyberai.example"],
+            },
+            openai_compatible={
+                "enabled": True,
+                "api_key": "sk-test-prod-config-only",
+            },
+        )
+
+
+def test_production_refuses_mock_fallback_model() -> None:
+    with pytest.raises(ValueError, match="mock models are not allowed"):
+        load_settings(
+            environment=Environment.PRODUCTION,
+            debug=False,
+            logging={"format": "json"},
+            database={"url": "postgresql+asyncpg://cyberai:strong-secret@db.internal/cyberai"},
+            redis={"url": "redis://redis.internal:6379/0"},
+            auth={"jwt_secret": "prod-jwt-secret-with-enough-entropy"},
+            app={
+                "cors_origins": ["https://app.cyberai.example"],
+                "trusted_hosts": ["api.cyberai.example"],
+            },
+            models={
+                "default_model": "openai-compatible-chat",
+                "fallback_models": ["mock-analyst-mini"],
+            },
+            openai_compatible={
+                "enabled": True,
+                "api_key": "sk-test-prod-config-only",
+            },
+        )
+
+
+def test_production_accepts_real_provider_and_disables_docs_by_default() -> None:
+    settings = load_settings(
+        environment=Environment.PRODUCTION,
+        debug=False,
+        logging={"format": "json"},
+        database={"url": "postgresql+asyncpg://cyberai:strong-secret@db.internal/cyberai"},
+        redis={"url": "redis://redis.internal:6379/0"},
+        auth={"jwt_secret": "prod-jwt-secret-with-enough-entropy"},
+        app={
+            "cors_origins": ["https://app.cyberai.example"],
+            "trusted_hosts": ["api.cyberai.example"],
+        },
+        models={"default_model": "openai-compatible-chat", "fallback_models": []},
+        openai_compatible={
+            "enabled": True,
+            "api_key": "sk-test-prod-config-only",
+        },
+    )
+
+    assert settings.app.expose_docs is False
+    assert settings.models.default_model == "openai-compatible-chat"
+    assert settings.build.commit == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_production_service_graph_does_not_register_mock_provider() -> None:
+    settings = load_settings(
+        environment=Environment.PRODUCTION,
+        debug=False,
+        logging={"format": "json"},
+        database={"url": "postgresql+asyncpg://cyberai:strong-secret@db.internal/cyberai"},
+        redis={"url": "redis://redis.internal:6379/0"},
+        auth={"jwt_secret": "prod-jwt-secret-with-enough-entropy"},
+        app={
+            "cors_origins": ["https://app.cyberai.example"],
+            "trusted_hosts": ["api.cyberai.example"],
+        },
+        models={"default_model": "openai-compatible-chat", "fallback_models": []},
+        openai_compatible={
+            "enabled": True,
+            "api_key": "sk-test-prod-config-only",
+        },
+    )
+    services = build_services(settings)
+    try:
+        assert services.providers.has("mock") is False
+        assert services.providers.has("openai-compatible") is True
+    finally:
+        await shutdown_services(services)
 
 
 def test_mask_credentials_redacts_password() -> None:

@@ -120,9 +120,11 @@ class ModelCatalog:
 
 
 def default_catalog(
-    *, openai_compatible: OpenAICompatibleProviderSettings | None = None
+    *,
+    openai_compatible: OpenAICompatibleProviderSettings | None = None,
+    include_mock: bool = True,
 ) -> ModelCatalog:
-    models = list(DEFAULT_MODELS)
+    models = list(DEFAULT_MODELS) if include_mock else []
     if openai_compatible is not None:
         real_model = _openai_compatible_model(openai_compatible)
         if real_model is not None:

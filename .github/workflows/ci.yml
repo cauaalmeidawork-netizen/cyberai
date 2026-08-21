@@ -64,7 +64,7 @@ jobs:
         env:
           CYBERAI_DATABASE__URL: postgresql+asyncpg://cyberai:cyberai_dev_password@localhost:5432/cyberai
           CYBERAI_REDIS__URL: redis://localhost:6379/0
-        run: uv run pytest --cov --cov-report=xml
+        run: uv run pytest -m "not integration" --cov --cov-report=xml
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
@@ -93,3 +93,10 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
         run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker images
+        run: docker compose -f infra/compose/docker-compose.yml build

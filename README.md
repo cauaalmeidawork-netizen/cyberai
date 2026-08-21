@@ -13,8 +13,9 @@ cd cyberai
 # 2. Copy the example environment file and adjust if needed
 cp .env.example .env
 
-# 3. Start the full stack with Docker Compose
-cd infra/compose && docker compose up --build
+# 3. Run migrations, then start the full stack with Docker Compose
+docker compose -f infra/compose/docker-compose.yml --profile migrate run --rm migrate
+docker compose -f infra/compose/docker-compose.yml up --build
 ```
 
 After startup:
@@ -22,6 +23,8 @@ After startup:
 - Web UI: http://localhost:3000
 - API: http://localhost:8000
 - API docs (local only): http://localhost:8000/docs
+- Liveness: http://localhost:8000/health/live
+- Readiness: http://localhost:8000/health/ready
 
 ## Development without Docker
 
@@ -59,6 +62,7 @@ The architecture is documented in `docs/`:
 - [`docs/architecture.md`](docs/architecture.md) - overall system design
 - [`docs/security.md`](docs/security.md) - security controls
 - [`docs/development.md`](docs/development.md) - developer workflow
+- [`docs/operations.md`](docs/operations.md) - production operations
 - [`docs/decisions/`](docs/decisions/) - architecture decision records
 
 ## Repository layout

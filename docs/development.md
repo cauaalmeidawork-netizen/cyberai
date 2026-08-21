@@ -7,7 +7,8 @@
 3. Start the stack:
 
 ```bash
-cd infra/compose && docker compose up --build
+docker compose -f infra/compose/docker-compose.yml --profile migrate run --rm migrate
+docker compose -f infra/compose/docker-compose.yml up --build
 ```
 
 ## Local backend

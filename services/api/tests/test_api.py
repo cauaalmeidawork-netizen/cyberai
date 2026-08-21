@@ -28,7 +28,8 @@ async def test_readiness_with_dependencies_down(app_client: AsyncClient) -> None
     names = {d["name"] for d in body["dependencies"]}
     assert "postgresql" in names
     assert "redis" in names
-    assert "inference:mock" in names
+    assert "schema" in names
+    assert "model_gateway" in names
 
 
 @pytest.mark.asyncio

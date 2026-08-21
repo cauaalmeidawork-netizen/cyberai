@@ -15,6 +15,12 @@ from sqlalchemy.ext.asyncio import (
 
 from cyberai.core.config import DatabaseSettings
 from cyberai.core.logging import get_logger
+from cyberai.platform.db.migrations import (
+    SchemaRevisionStatus,
+    applied_schema_revision,
+    expected_schema_head,
+    schema_revision_health,
+)
 from cyberai.platform.db.tenant import TenantContext, apply_tenant_context
 
 logger = get_logger(__name__)
@@ -84,6 +90,17 @@ class Database:
             )
             return False
         return True
+
+    async def check_schema_revision(self) -> SchemaRevisionStatus:
+        """Return whether the applied Alembic revision matches the expected head."""
+        try:
+            expected = expected_schema_head()
+            async with self._session_factory() as session:
+                applied = await applied_schema_revision(session)
+        except Exception as exc:
+            logger.warning("database.schema_check_failed", error=type(exc).__name__)
+            return SchemaRevisionStatus(healthy=False, detail="schema_unknown")
+        return schema_revision_health(applied_revision=applied, expected_head=expected)
 
     async def dispose(self) -> None:
         await self._engine.dispose()

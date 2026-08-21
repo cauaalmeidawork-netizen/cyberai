@@ -6,6 +6,7 @@ Separated from container.py to avoid transitive imports of concrete providers in
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from cyberai.core.config import Settings
 from cyberai.modules.billing import LimitEnforcer, StaticPlanCatalog
@@ -24,6 +25,7 @@ from cyberai.platform.db import Database
 class Services:
     """Every long-lived dependency of the process."""
 
+    started_at: datetime
     settings: Settings
     database: Database
     cache: RedisCache

@@ -50,12 +50,36 @@ services:
       CYBERAI_REDIS__URL: redis://redis:6379/0
       CYBERAI_LOGGING__FORMAT: console
       CYBERAI_LOGGING__LEVEL: DEBUG
+      CYBERAI_APP__TRUSTED_HOSTS: '["localhost","127.0.0.1","cyberai-api"]'
+      CYBERAI_APP__EXPOSE_DOCS: "true"
     ports:
       - "${API_PORT:-8000}:8000"
     networks:
       - cyberai
-    command: >
-      sh -c "alembic upgrade head && uvicorn cyberai.main:create_app --factory --host 0.0.0.0 --port 8000 --proxy-headers"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    build:
+      context: ../../services/api
+      dockerfile: ../../infra/docker/Dockerfile.api
+    container_name: cyberai-migrate
+    profiles: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      CYBERAI_ENVIRONMENT: local
+      CYBERAI_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER:-cyberai}:${POSTGRES_PASSWORD:-cyberai_dev_password}@postgres:5432/${POSTGRES_DB:-cyberai}
+      CYBERAI_REDIS__URL: redis://redis:6379/0
+      CYBERAI_LOGGING__FORMAT: console
+    networks:
+      - cyberai
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
 
   web:
     build:
@@ -72,6 +96,11 @@ services:
       - "${WEB_PORT:-3000}:3000"
     networks:
       - cyberai
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   cyberai-postgres-data:

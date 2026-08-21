@@ -16,13 +16,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from cyberai.api.errors import register_exception_handlers
 from cyberai.api.health import router as health_router
 from cyberai.api.metrics import router as metrics_router
 from cyberai.api.middleware import (
     AccessLogMiddleware,
+    RequestBodyLimitMiddleware,
     RequestContextMiddleware,
+    ResponseStartTimeoutMiddleware,
     SecurityHeadersMiddleware,
 )
 from cyberai.api.v1 import v1_router
@@ -67,7 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await shutdown_services(services)
             logger.info("application.stopped")
 
-    expose_docs = not settings.environment.is_deployed
+    expose_docs = settings.app.expose_docs is True
 
     app = FastAPI(
         title="CYBER AI API",
@@ -85,6 +88,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, enable_hsts=settings.environment.is_deployed)
     app.add_middleware(AccessLogMiddleware, silent_paths=tuple(settings.logging.silent_paths))
     app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.app.trusted_hosts,
+    )
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.app.cors_origins,
         allow_credentials=True,
@@ -92,6 +99,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-Request-ID", "Idempotency-Key"],
         expose_headers=["X-Request-ID"],
         max_age=600,
+    )
+    app.add_middleware(
+        ResponseStartTimeoutMiddleware,
+        timeout_seconds=settings.app.request_timeout_seconds,
+    )
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=settings.app.max_request_body_bytes,
     )
     app.add_middleware(RequestContextMiddleware)
 

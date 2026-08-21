@@ -7,6 +7,8 @@ database replaceable without touching business code.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from cyberai.core.config import Settings
 from cyberai.core.logging import get_logger
 from cyberai.modules.billing import (
@@ -44,6 +46,14 @@ def build_services(settings: Settings) -> Services:
     database = Database(settings.database)
     cache = RedisCache(settings.redis)
     metrics = PrometheusMetricsRecorder()
+    metrics.gauge(
+        "cyberai_build_info",
+        labels={
+            "version": settings.version,
+            "environment": settings.environment.value,
+            "commit": settings.build.commit[:12],
+        },
+    ).set(1)
     plan_catalog = StaticPlanCatalog()
     billing_repository = BillingRepository(database, plan_catalog, metrics=metrics)
     policy_engine = PolicyEngine()
@@ -53,12 +63,17 @@ def build_services(settings: Settings) -> Services:
     )
     security_audit_recorder = SecurityAuditRecorder(database, metrics=metrics)
 
-    providers = ProviderRegistry([MockModelProvider(settings.mock)])
+    providers = ProviderRegistry()
+    if not settings.environment.is_deployed:
+        providers.register(MockModelProvider(settings.mock))
     if settings.openai_compatible.enabled:
         providers.register(OpenAICompatibleModelProvider(settings.openai_compatible))
     inference_gateway = InferenceGateway(providers, settings.inference, metrics=metrics)
 
-    catalog = default_catalog(openai_compatible=settings.openai_compatible)
+    catalog = default_catalog(
+        openai_compatible=settings.openai_compatible,
+        include_mock=not settings.environment.is_deployed,
+    )
     router = ModelRouter(catalog, settings.models)
     token_estimator = ProviderTokenEstimator(catalog, inference_gateway)
     rate_limiter = RedisRateLimiter(
@@ -99,6 +114,7 @@ def build_services(settings: Settings) -> Services:
         fallback_models=settings.models.fallback_models,
     )
     return Services(
+        started_at=datetime.now(UTC),
         settings=settings,
         database=database,
         cache=cache,
