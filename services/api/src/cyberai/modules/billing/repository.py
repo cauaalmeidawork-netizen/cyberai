@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -19,11 +19,14 @@ from cyberai.modules.billing.types import (
     QuotaSnapshot,
     Subscription,
     TokenEstimate,
+    WebhookProcessingDecision,
 )
 from cyberai.modules.modelgw.usage import UsageRecord
 from cyberai.observability.metrics import MetricsRecorder, NoopMetricsRecorder
 from cyberai.platform.db import Database, TenantContext
 from cyberai.platform.db.models import (
+    BillingCustomerModel,
+    BillingWebhookEventModel,
     SubscriptionModel,
     UsageAggregateModel,
     UsageRecordModel,
@@ -45,20 +48,181 @@ class BillingRepository:
         self._plan_catalog = plan_catalog or StaticPlanCatalog()
         self._metrics = metrics or NoopMetricsRecorder()
 
+    @property
+    def database(self) -> Database:
+        return self._db
+
     async def get_subscription(self, org_id: UUID) -> Subscription:
         async with self._db.session(TenantContext(org_id=org_id)) as session:
             result = await session.execute(
                 select(SubscriptionModel)
                 .where(
                     SubscriptionModel.org_id == org_id,
-                    SubscriptionModel.status == "active",
+                    SubscriptionModel.status.in_(("active", "trialing")),
                 )
                 .order_by(SubscriptionModel.created_at.desc())
             )
             subscription = result.scalar_one_or_none()
         if subscription is None:
             return Subscription(org_id=org_id, plan_key="free")
-        return Subscription(org_id=org_id, plan_key=subscription.plan_key)
+        return Subscription(
+            org_id=org_id,
+            plan_key=subscription.plan_key,
+            status=subscription.status,
+            current_period_start=subscription.current_period_start,
+            current_period_end=subscription.current_period_end,
+        )
+
+    async def upsert_billing_customer(
+        self,
+        *,
+        org_id: UUID,
+        provider: str,
+        provider_customer_id: str,
+    ) -> BillingCustomerModel:
+        async with self._db.session(TenantContext(org_id=org_id)) as session:
+            customer = await session.scalar(
+                select(BillingCustomerModel).where(
+                    BillingCustomerModel.org_id == org_id,
+                    BillingCustomerModel.provider == provider,
+                )
+            )
+            if customer is None:
+                customer = BillingCustomerModel(
+                    org_id=org_id,
+                    provider=provider,
+                    provider_customer_id=provider_customer_id,
+                )
+            else:
+                customer.provider_customer_id = provider_customer_id
+            session.add(customer)
+            await session.flush()
+            await session.refresh(customer)
+            return customer
+
+    async def get_billing_customer(
+        self, *, org_id: UUID, provider: str
+    ) -> BillingCustomerModel | None:
+        async with self._db.session(TenantContext(org_id=org_id)) as session:
+            customer = await session.scalar(
+                select(BillingCustomerModel)
+                .where(
+                    BillingCustomerModel.org_id == org_id,
+                    BillingCustomerModel.provider == provider,
+                )
+                .limit(1)
+            )
+        return customer
+
+    async def begin_webhook_event(
+        self,
+        *,
+        provider: str,
+        event_id: str,
+        event_type: str | None = None,
+    ) -> WebhookProcessingDecision:
+        async with self._db.session() as session:
+            existing = await session.scalar(
+                select(BillingWebhookEventModel).where(
+                    BillingWebhookEventModel.provider == provider,
+                    BillingWebhookEventModel.event_id == event_id,
+                )
+            )
+            if existing is not None:
+                previous_status = existing.status
+                if previous_status == "failed":
+                    existing.status = "processing"
+                    existing.error_code = None
+                    session.add(existing)
+                return WebhookProcessingDecision(
+                    should_process=previous_status == "failed",
+                    status=previous_status,
+                )
+            session.add(
+                BillingWebhookEventModel(
+                    provider=provider,
+                    event_id=event_id,
+                    event_type=event_type,
+                    status="processing",
+                )
+            )
+            return WebhookProcessingDecision(should_process=True, status="processing")
+
+    async def mark_webhook_event_processed(self, *, provider: str, event_id: str) -> None:
+        async with self._db.session() as session:
+            event = await session.scalar(
+                select(BillingWebhookEventModel).where(
+                    BillingWebhookEventModel.provider == provider,
+                    BillingWebhookEventModel.event_id == event_id,
+                )
+            )
+            if event is not None:
+                event.status = "processed"
+                event.error_code = None
+                event.processed_at = datetime.now(UTC)
+                session.add(event)
+
+    async def mark_webhook_event_failed(
+        self,
+        *,
+        provider: str,
+        event_id: str,
+        error_code: str,
+    ) -> None:
+        async with self._db.session() as session:
+            event = await session.scalar(
+                select(BillingWebhookEventModel).where(
+                    BillingWebhookEventModel.provider == provider,
+                    BillingWebhookEventModel.event_id == event_id,
+                )
+            )
+            if event is not None:
+                event.status = "failed"
+                event.error_code = error_code
+                session.add(event)
+
+    async def sync_provider_subscription(
+        self,
+        *,
+        provider: str,
+        provider_customer_id: str,
+        provider_subscription_id: str,
+        provider_status: str,
+        plan_key: str,
+        current_period_start: datetime | None,
+        current_period_end: datetime | None,
+    ) -> None:
+        local_status = _local_subscription_status(provider_status)
+        async with self._db.session() as session:
+            customer = await session.scalar(
+                select(BillingCustomerModel).where(
+                    BillingCustomerModel.provider == provider,
+                    BillingCustomerModel.provider_customer_id == provider_customer_id,
+                )
+            )
+            if customer is None:
+                raise ValueError("billing_customer_not_found")
+            subscription = await session.scalar(
+                select(SubscriptionModel).where(
+                    SubscriptionModel.org_id == customer.org_id,
+                    SubscriptionModel.provider == provider,
+                    SubscriptionModel.provider_subscription_id == provider_subscription_id,
+                )
+            )
+            if subscription is None:
+                subscription = SubscriptionModel(
+                    org_id=customer.org_id,
+                    plan_key=plan_key,
+                )
+            subscription.plan_key = plan_key
+            subscription.status = local_status
+            subscription.provider = provider
+            subscription.provider_customer_id = provider_customer_id
+            subscription.provider_subscription_id = provider_subscription_id
+            subscription.provider_status = provider_status
+            subscription.current_period_start = current_period_start
+            subscription.current_period_end = current_period_end
+            session.add(subscription)
 
     async def reserve(
         self,
@@ -356,3 +520,11 @@ class PersistentUsageSink:
 
     async def record(self, record: UsageRecord) -> None:
         await self._repository.record_usage_once(record)
+
+
+def _local_subscription_status(provider_status: str) -> str:
+    if provider_status in {"active", "trialing"}:
+        return provider_status
+    if provider_status in {"past_due", "canceled", "unpaid", "incomplete", "incomplete_expired"}:
+        return provider_status
+    return "inactive"

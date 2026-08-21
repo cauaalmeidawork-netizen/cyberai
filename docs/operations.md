@@ -6,6 +6,12 @@ the existing modular monolith safely.
 
 ## Deployment Flow
 
+The reference runtime for go-live is a managed Linux Docker host behind HTTPS
+termination, using managed PostgreSQL and managed Redis. Images are built by
+GitHub Actions, pushed to GHCR, then deployed with
+`infra/compose/docker-compose.production.yml`. Kubernetes is intentionally not
+part of the M12 reference path.
+
 Run migrations as an explicit deployment step before rolling out API instances:
 
 ```bash
@@ -51,11 +57,32 @@ Set `CYBERAI_ENVIRONMENT=production` or `staging` and provide explicit values:
 - `CYBERAI_MODELS__DEFAULT_MODEL`: real configured model key.
 - `CYBERAI_MODELS__FALLBACK_MODELS`: real fallback model keys, or `[]`.
 - `CYBERAI_POLICY__ENABLED=true`.
+- `CYBERAI_BILLING__PROVIDER=stripe`.
+- `CYBERAI_BILLING__STRIPE_SECRET_KEY`: Stripe API secret from a secret manager.
+- `CYBERAI_BILLING__STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret.
+- `CYBERAI_BILLING__STRIPE_PRICE_IDS`: JSON map of local plan keys to Stripe price IDs.
+- `CYBERAI_BILLING__CHECKOUT_SUCCESS_URL`, `CHECKOUT_CANCEL_URL`,
+  `PORTAL_RETURN_URL`: browser URLs for Stripe redirects.
 
 Production and staging refuse to start with mock model defaults or fallbacks.
 Mock providers are only for local development, tests and CI.
 Production and staging also refuse to start when legacy Bearer authentication
 is enabled or OIDC/session secrets are missing.
+When `billing.provider=stripe`, production and staging refuse to start if Stripe
+secrets, price IDs or redirect URLs are missing.
+
+## Release Workflow
+
+The protected `Release` workflow:
+
+1. builds API and web Docker images;
+2. pushes images to GHCR;
+3. copies the production Compose file to the runtime host;
+4. runs the migration profile before rollout;
+5. starts API/web;
+6. runs smoke tests against the production API base URL.
+
+PR CI never deploys.
 
 ## Health and Readiness
 
@@ -101,3 +128,18 @@ metrics. It does not call a paid model provider.
   image being rolled out.
 - Migration jobs should be tested against restored backups before production
   rollout when a migration changes tenant-scoped data or RLS policies.
+
+Automated backup command:
+
+```bash
+python scripts/pg_backup.py --database-url "$CYBERAI_DATABASE__URL" --output backups/cyberai.dump
+```
+
+Restore validation command:
+
+```bash
+python scripts/pg_restore_check.py \
+  --admin-url "$POSTGRES_ADMIN_URL" \
+  --backup backups/cyberai.dump \
+  --database cyberai_restore_check
+```

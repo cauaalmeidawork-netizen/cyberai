@@ -87,15 +87,23 @@ export interface Quota {
 
 export interface BillingLimits {
   plan: string;
+  subscription_status: string;
   quotas: Quota[];
   rag_allowed: boolean;
   document_limit: number;
   allowed_models: string[] | null;
+  checkout_available?: boolean;
+  portal_available?: boolean;
 }
 
 export interface BillingUsage {
   plan: string;
+  subscription_status: string;
   usage: Quota[];
+}
+
+export interface BillingSession {
+  url: string;
 }
 
 export interface OrganizationMembership {

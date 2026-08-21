@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    outputs:
+      api_image: ${{ steps.meta.outputs.api_image }}
+      web_image: ${{ steps.meta.outputs.web_image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image metadata
+        id: meta
+        run: |
+          IMAGE_TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::12}"
+          echo "api_image=ghcr.io/${GITHUB_REPOSITORY}/api:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "web_image=ghcr.io/${GITHUB_REPOSITORY}/web:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+      - name: Build and push API
+        run: |
+          docker build -f infra/docker/Dockerfile.api -t "${{ steps.meta.outputs.api_image }}" services/api
+          docker push "${{ steps.meta.outputs.api_image }}"
+      - name: Build and push web
+        run: |
+          docker build \
+            -f infra/docker/Dockerfile.web \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="${{ vars.NEXT_PUBLIC_API_BASE_URL }}" \
+            -t "${{ steps.meta.outputs.web_image }}" apps/web
+          docker push "${{ steps.meta.outputs.web_image }}"
+
+  deploy-production:
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+      - name: Copy compose file
+        run: |
+          scp -o StrictHostKeyChecking=yes infra/compose/docker-compose.production.yml \
+            "${{ secrets.PRODUCTION_SSH_USER }}@${{ secrets.PRODUCTION_SSH_HOST }}:/opt/cyberai/docker-compose.yml"
+      - name: Deploy with migration job
+        env:
+          API_IMAGE: ${{ needs.build-push.outputs.api_image }}
+          WEB_IMAGE: ${{ needs.build-push.outputs.web_image }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes "${{ secrets.PRODUCTION_SSH_USER }}@${{ secrets.PRODUCTION_SSH_HOST }}" \
+            "cd /opt/cyberai && \
+             CYBERAI_API_IMAGE='${API_IMAGE}' CYBERAI_WEB_IMAGE='${WEB_IMAGE}' docker compose --profile migrate run --rm migrate && \
+             CYBERAI_API_IMAGE='${API_IMAGE}' CYBERAI_WEB_IMAGE='${WEB_IMAGE}' docker compose up -d api web"
+      - name: Post-deploy smoke
+        run: python scripts/smoke.py --base-url "${{ vars.PRODUCTION_API_BASE_URL }}"

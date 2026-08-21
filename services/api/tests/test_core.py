@@ -118,6 +118,7 @@ def test_production_accepts_real_provider_and_disables_docs_by_default() -> None
             "enabled": True,
             "api_key": "sk-test-prod-config-only",
         },
+        billing=_prod_billing_settings(),
     )
 
     assert settings.app.expose_docs is False
@@ -143,6 +144,7 @@ async def test_production_service_graph_does_not_register_mock_provider() -> Non
             "enabled": True,
             "api_key": "sk-test-prod-config-only",
         },
+        billing=_prod_billing_settings(),
     )
     services = build_services(settings)
     try:
@@ -169,6 +171,18 @@ def _prod_auth_settings() -> dict[str, object]:
         "session_secret": "prod-session-secret-with-enough-entropy",
         "csrf_secret": "prod-csrf-secret-with-enough-entropy",
         "session_secure_cookie": True,
+    }
+
+
+def _prod_billing_settings() -> dict[str, object]:
+    return {
+        "provider": "stripe",
+        "stripe_secret_key": "sk_live_config_test",
+        "stripe_webhook_secret": "whsec_config_test",
+        "stripe_price_ids": {"pro": "price_pro", "business": "price_business"},
+        "checkout_success_url": "https://app.cyberai.example/billing/success",
+        "checkout_cancel_url": "https://app.cyberai.example/billing/cancel",
+        "portal_return_url": "https://app.cyberai.example/billing",
     }
 
 

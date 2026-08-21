@@ -13,6 +13,7 @@ from fastapi import Depends, Request
 
 from cyberai.core.config import Settings
 from cyberai.modules.billing import StaticPlanCatalog
+from cyberai.modules.billing.providers import BillingProvider
 from cyberai.modules.billing.repository import BillingRepository
 from cyberai.modules.inference import InferenceGateway
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway
@@ -72,6 +73,12 @@ def get_billing_repository(
     return services.billing_repository
 
 
+def get_billing_provider(
+    services: Annotated[Services, Depends(get_services)],
+) -> BillingProvider | None:
+    return services.billing_provider
+
+
 def get_plan_catalog(services: Annotated[Services, Depends(get_services)]) -> StaticPlanCatalog:
     return services.plan_catalog
 
@@ -86,4 +93,5 @@ InferenceGatewayDep = Annotated[InferenceGateway, Depends(get_inference_gateway)
 OrchestratorServiceDep = Annotated[OrchestratorService, Depends(get_orchestrator)]
 MetricsDep = Annotated[MetricsRecorder, Depends(get_metrics)]
 BillingRepositoryDep = Annotated[BillingRepository, Depends(get_billing_repository)]
+BillingProviderDep = Annotated[BillingProvider | None, Depends(get_billing_provider)]
 PlanCatalogDep = Annotated[StaticPlanCatalog, Depends(get_plan_catalog)]

@@ -197,6 +197,10 @@ class SubscriptionModel(Base):
     org_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("organizations.id"), index=True)
     plan_key: Mapped[str] = mapped_column(String(32), ForeignKey("plans.key"))
     status: Mapped[str] = mapped_column(String(32), default="active")
+    provider: Mapped[str | None] = mapped_column(String(32))
+    provider_customer_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    provider_subscription_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    provider_status: Mapped[str | None] = mapped_column(String(32))
     current_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -206,6 +210,49 @@ class SubscriptionModel(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class BillingCustomerModel(Base):
+    __tablename__ = "billing_customers"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("organizations.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    provider_customer_id: Mapped[str] = mapped_column(String(128), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+    __table_args__ = (
+        UniqueConstraint("org_id", "provider", name="uq_billing_customers_org_provider"),
+        UniqueConstraint(
+            "provider",
+            "provider_customer_id",
+            name="uq_billing_customers_provider_customer",
+        ),
+    )
+
+
+class BillingWebhookEventModel(Base):
+    __tablename__ = "billing_webhook_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    provider: Mapped[str] = mapped_column(String(32), index=True)
+    event_id: Mapped[str] = mapped_column(String(128), index=True)
+    event_type: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(32), default="processing")
+    error_code: Mapped[str | None] = mapped_column(String(128))
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint("provider", "event_id", name="uq_billing_webhook_events_provider_event"),
     )
 
 

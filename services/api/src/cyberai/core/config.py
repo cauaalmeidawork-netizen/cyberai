@@ -205,8 +205,15 @@ class BillingSettings(BaseModel):
     """Usage limits and rate-limiter behavior."""
 
     enabled: bool = True
+    provider: Literal["none", "stripe"] = "none"
     rate_limit_fail_open: bool = True
     user_rate_limit_enabled: bool = False
+    stripe_secret_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    stripe_price_ids: dict[str, str] = Field(default_factory=dict)
+    checkout_success_url: str | None = None
+    checkout_cancel_url: str | None = None
+    portal_return_url: str | None = None
 
 
 class PolicySettings(BaseModel):
@@ -301,6 +308,21 @@ class Settings(BaseSettings):
             problems.append("auth.csrf_secret must be configured outside local/ci")
         if self.auth.session_secure_cookie is False:
             problems.append("auth.session_secure_cookie must be true outside local/ci")
+        if self.billing.provider != "stripe":
+            problems.append("billing.provider must be 'stripe' outside local/ci")
+        if self.billing.provider == "stripe":
+            if self.billing.stripe_secret_key is None:
+                problems.append("billing.stripe_secret_key must be configured outside local/ci")
+            if self.billing.stripe_webhook_secret is None:
+                problems.append("billing.stripe_webhook_secret must be configured outside local/ci")
+            if not self.billing.stripe_price_ids:
+                problems.append("billing.stripe_price_ids must be configured outside local/ci")
+            if not self.billing.checkout_success_url:
+                problems.append("billing.checkout_success_url must be configured outside local/ci")
+            if not self.billing.checkout_cancel_url:
+                problems.append("billing.checkout_cancel_url must be configured outside local/ci")
+            if not self.billing.portal_return_url:
+                problems.append("billing.portal_return_url must be configured outside local/ci")
         configured_models = [self.models.default_model, *self.models.fallback_models]
         if any(model.startswith("mock-") for model in configured_models):
             problems.append("mock models are not allowed outside local/ci")

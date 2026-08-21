@@ -1,0 +1,76 @@
+services:
+  api:
+    image: ${CYBERAI_API_IMAGE}
+    environment:
+      CYBERAI_ENVIRONMENT: production
+      CYBERAI_DEBUG: "false"
+      CYBERAI_VERSION: ${CYBERAI_VERSION}
+      CYBERAI_BUILD__COMMIT: ${CYBERAI_BUILD_COMMIT}
+      CYBERAI_BUILD__TIME: ${CYBERAI_BUILD_TIME}
+      CYBERAI_DATABASE__URL: ${CYBERAI_DATABASE__URL}
+      CYBERAI_REDIS__URL: ${CYBERAI_REDIS__URL}
+      CYBERAI_LOGGING__FORMAT: json
+      CYBERAI_APP__CORS_ORIGINS: ${CYBERAI_APP__CORS_ORIGINS}
+      CYBERAI_APP__TRUSTED_HOSTS: ${CYBERAI_APP__TRUSTED_HOSTS}
+      CYBERAI_APP__EXPOSE_DOCS: "false"
+      CYBERAI_AUTH__LEGACY_BEARER_ENABLED: "false"
+      CYBERAI_AUTH__OIDC_ENABLED: "true"
+      CYBERAI_AUTH__OIDC_AUTO_PROVISION_ENABLED: "false"
+      CYBERAI_AUTH__OIDC_ISSUER: ${CYBERAI_AUTH__OIDC_ISSUER}
+      CYBERAI_AUTH__OIDC_CLIENT_ID: ${CYBERAI_AUTH__OIDC_CLIENT_ID}
+      CYBERAI_AUTH__OIDC_CLIENT_SECRET: ${CYBERAI_AUTH__OIDC_CLIENT_SECRET}
+      CYBERAI_AUTH__OIDC_REDIRECT_URI: ${CYBERAI_AUTH__OIDC_REDIRECT_URI}
+      CYBERAI_AUTH__SESSION_SECRET: ${CYBERAI_AUTH__SESSION_SECRET}
+      CYBERAI_AUTH__CSRF_SECRET: ${CYBERAI_AUTH__CSRF_SECRET}
+      CYBERAI_AUTH__SESSION_SECURE_COOKIE: "true"
+      CYBERAI_OPENAI_COMPATIBLE__ENABLED: "true"
+      CYBERAI_OPENAI_COMPATIBLE__API_KEY: ${CYBERAI_OPENAI_COMPATIBLE__API_KEY}
+      CYBERAI_MODELS__DEFAULT_MODEL: ${CYBERAI_MODELS__DEFAULT_MODEL}
+      CYBERAI_MODELS__FALLBACK_MODELS: ${CYBERAI_MODELS__FALLBACK_MODELS}
+      CYBERAI_POLICY__ENABLED: "true"
+      CYBERAI_BILLING__PROVIDER: stripe
+      CYBERAI_BILLING__STRIPE_SECRET_KEY: ${CYBERAI_BILLING__STRIPE_SECRET_KEY}
+      CYBERAI_BILLING__STRIPE_WEBHOOK_SECRET: ${CYBERAI_BILLING__STRIPE_WEBHOOK_SECRET}
+      CYBERAI_BILLING__STRIPE_PRICE_IDS: ${CYBERAI_BILLING__STRIPE_PRICE_IDS}
+      CYBERAI_BILLING__CHECKOUT_SUCCESS_URL: ${CYBERAI_BILLING__CHECKOUT_SUCCESS_URL}
+      CYBERAI_BILLING__CHECKOUT_CANCEL_URL: ${CYBERAI_BILLING__CHECKOUT_CANCEL_URL}
+      CYBERAI_BILLING__PORTAL_RETURN_URL: ${CYBERAI_BILLING__PORTAL_RETURN_URL}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  web:
+    image: ${CYBERAI_WEB_IMAGE}
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  migrate:
+    image: ${CYBERAI_API_IMAGE}
+    profiles: ["migrate"]
+    environment:
+      CYBERAI_ENVIRONMENT: production
+      CYBERAI_DATABASE__URL: ${CYBERAI_DATABASE__URL}
+      CYBERAI_REDIS__URL: ${CYBERAI_REDIS__URL}
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"

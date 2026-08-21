@@ -10,6 +10,7 @@ from datetime import datetime
 
 from cyberai.core.config import Settings
 from cyberai.modules.billing import LimitEnforcer, StaticPlanCatalog
+from cyberai.modules.billing.providers import BillingProvider
 from cyberai.modules.billing.repository import BillingRepository
 from cyberai.modules.inference import InferenceGateway, ProviderRegistry
 from cyberai.modules.modelgw import ModelCatalog, ModelGateway, ModelRouter
@@ -35,6 +36,7 @@ class Services:
     router: ModelRouter
     plan_catalog: StaticPlanCatalog
     billing_repository: BillingRepository
+    billing_provider: BillingProvider | None
     limit_enforcer: LimitEnforcer
     policy_engine: PolicyEngine
     abuse_tracker: AbuseTracker

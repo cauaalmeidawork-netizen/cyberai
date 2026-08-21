@@ -54,6 +54,15 @@ class Plan:
 class Subscription:
     org_id: UUID
     plan_key: str
+    status: str = "active"
+    current_period_start: datetime | None = None
+    current_period_end: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookProcessingDecision:
+    should_process: bool
+    status: str
 
 
 @dataclass(frozen=True, slots=True)

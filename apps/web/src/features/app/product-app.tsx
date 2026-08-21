@@ -22,6 +22,7 @@ import { API_BASE_URL } from "@/lib/config";
 import type {
   AuthMe,
   BillingLimits,
+  BillingSession,
   BillingUsage,
   ChatMessage,
   Conversation,
@@ -445,6 +446,26 @@ export function ProductApp() {
     }
   }
 
+  async function handleUpgrade(plan: string) {
+    try {
+      const client = makeClient();
+      const session = await client.post<BillingSession>("/api/v1/billing/checkout", { plan });
+      window.location.assign(session.url);
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
+  async function handleManageSubscription() {
+    try {
+      const client = makeClient();
+      const session = await client.post<BillingSession>("/api/v1/billing/portal", {});
+      window.location.assign(session.url);
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
   if (authState === "loading") {
     return (
       <main className="min-h-screen bg-background text-foreground">
@@ -715,6 +736,12 @@ export function ProductApp() {
             <p className="mb-3 text-sm font-medium">
               Plan {workspace.limits?.plan ?? workspace.usage?.plan ?? "unknown"}
             </p>
+            <p className="mb-3 text-xs text-muted">
+              Status{" "}
+              {workspace.limits?.subscription_status ??
+                workspace.usage?.subscription_status ??
+                "unknown"}
+            </p>
             <div className="quota-stack">
               {(workspace.usage?.usage ?? workspace.limits?.quotas ?? []).map((quota) => (
                 <QuotaMeter key={quota.resource} quota={quota} />
@@ -730,6 +757,27 @@ export function ProductApp() {
                     <strong>{workspace.limits.document_limit}</strong>
                   </div>
                 </>
+              ) : null}
+            </div>
+            <div className="mt-4 grid gap-2">
+              {workspace.limits?.checkout_available ? (
+                <button
+                  className="secondary-button w-full"
+                  type="button"
+                  onClick={() => void handleUpgrade("pro")}
+                >
+                  <ChevronRight size={14} aria-hidden />
+                  Upgrade plan
+                </button>
+              ) : null}
+              {workspace.limits?.portal_available ? (
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => void handleManageSubscription()}
+                >
+                  Manage subscription
+                </button>
               ) : null}
             </div>
           </section>

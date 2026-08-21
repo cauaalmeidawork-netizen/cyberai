@@ -205,6 +205,47 @@ describe("product app", () => {
       expect(screen.queryByText("Runbook")).not.toBeInTheDocument();
     });
   });
+
+  it("starts checkout and customer portal from backend-provided sessions", async () => {
+    const assignMock = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...window.location, assign: assignMock },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const base = await workspaceFetch(input, init);
+        if (base.status !== 404) {
+          return base;
+        }
+        if (url.endsWith("/api/v1/billing/checkout")) {
+          expect(init?.method).toBe("POST");
+          const body = init?.body;
+          expect(body).toBeDefined();
+          expect(JSON.parse(String(body))).toEqual({ plan: "pro" });
+          return jsonResponse({ url: "https://checkout.test" });
+        }
+        if (url.endsWith("/api/v1/billing/portal")) {
+          expect(init?.method).toBe("POST");
+          return jsonResponse({ url: "https://portal.test" });
+        }
+        return jsonResponse({}, 404);
+      }),
+    );
+
+    render(<ProductApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Plan pro")).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole("button", { name: /Upgrade plan/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Manage subscription/i }));
+
+    expect(assignMock).toHaveBeenCalledWith("https://checkout.test");
+    expect(assignMock).toHaveBeenCalledWith("https://portal.test");
+  });
 });
 
 async function workspaceFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -221,14 +262,17 @@ async function workspaceFetch(input: RequestInfo | URL, init?: RequestInit): Pro
   if (url.endsWith("/api/v1/billing/limits")) {
     return jsonResponse({
       plan: "pro",
+      subscription_status: "active",
       quotas: [],
       rag_allowed: true,
       document_limit: 25,
       allowed_models: null,
+      checkout_available: true,
+      portal_available: true,
     });
   }
   if (url.endsWith("/api/v1/billing/usage")) {
-    return jsonResponse({ plan: "pro", usage: [] });
+    return jsonResponse({ plan: "pro", subscription_status: "active", usage: [] });
   }
   if (url.endsWith("/api/v1/projects/project-1/conversations") && init?.method !== "POST") {
     return jsonResponse([]);

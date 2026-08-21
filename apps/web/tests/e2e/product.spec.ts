@@ -69,16 +69,19 @@ test("beta product flow persists chat history across reload", async ({ page }) =
       await route.fulfill({
         json: {
           plan: "pro",
+          subscription_status: "active",
           quotas: [],
           rag_allowed: true,
           document_limit: 25,
           allowed_models: null,
+          checkout_available: true,
+          portal_available: true,
         },
       });
       return;
     }
     if (path === "/api/v1/billing/usage") {
-      await route.fulfill({ json: { plan: "pro", usage: [] } });
+      await route.fulfill({ json: { plan: "pro", subscription_status: "active", usage: [] } });
       return;
     }
     if (path === "/api/v1/projects/project-1/conversations" && request.method() === "GET") {

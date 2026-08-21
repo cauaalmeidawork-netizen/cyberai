@@ -17,6 +17,7 @@ from cyberai.modules.billing import (
     ProviderTokenEstimator,
     StaticPlanCatalog,
 )
+from cyberai.modules.billing.providers import BillingProvider, StripeBillingProvider
 from cyberai.modules.billing.redis_rate_limit import RedisRateLimiter
 from cyberai.modules.billing.repository import BillingRepository, PersistentUsageSink
 from cyberai.modules.inference import InferenceGateway, ProviderRegistry
@@ -56,6 +57,13 @@ def build_services(settings: Settings) -> Services:
     ).set(1)
     plan_catalog = StaticPlanCatalog()
     billing_repository = BillingRepository(database, plan_catalog, metrics=metrics)
+    billing_provider: BillingProvider | None = None
+    if settings.billing.provider == "stripe":
+        assert settings.billing.stripe_secret_key is not None
+        billing_provider = StripeBillingProvider(
+            api_key=settings.billing.stripe_secret_key.get_secret_value(),
+            price_ids=settings.billing.stripe_price_ids,
+        )
     policy_engine = PolicyEngine()
     abuse_tracker = AbuseTracker(
         threshold=settings.policy.abuse_threshold,
@@ -124,6 +132,7 @@ def build_services(settings: Settings) -> Services:
         router=router,
         plan_catalog=plan_catalog,
         billing_repository=billing_repository,
+        billing_provider=billing_provider,
         limit_enforcer=limit_enforcer,
         policy_engine=policy_engine,
         abuse_tracker=abuse_tracker,
