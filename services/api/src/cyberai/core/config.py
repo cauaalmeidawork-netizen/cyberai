@@ -183,6 +183,7 @@ class OpenAICompatibleProviderSettings(BaseModel):
     max_output_tokens: Annotated[int, Field(gt=0)] = 16_384
     connect_timeout_seconds: Annotated[float, Field(gt=0)] = 10.0
     request_timeout_seconds: Annotated[float, Field(gt=0)] = 60.0
+    keep_alive: str | None = None
 
     @field_validator("base_url")
     @classmethod

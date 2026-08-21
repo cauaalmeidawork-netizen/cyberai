@@ -67,6 +67,13 @@ export async function* streamConversationMessage(
           return;
         }
         if (event) {
+          if (event.event === "error") {
+            throw new ApiError(event.message, {
+              status: 500,
+              code: event.code ?? "stream_error",
+              requestId: response.headers.get("x-request-id"),
+            });
+          }
           yield event;
         }
       }
@@ -74,6 +81,13 @@ export async function* streamConversationMessage(
 
     const trailing = parseSseBlock(buffer);
     if (trailing && trailing !== "done") {
+      if (trailing.event === "error") {
+        throw new ApiError(trailing.message, {
+          status: 500,
+          code: trailing.code ?? "stream_error",
+          requestId: response.headers.get("x-request-id"),
+        });
+      }
       yield trailing;
     }
   } finally {

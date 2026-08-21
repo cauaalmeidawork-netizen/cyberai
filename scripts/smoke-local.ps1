@@ -103,7 +103,26 @@ $stream = curl.exe -sS -N -b $CookieJar -c $CookieJar `
 Remove-Item -LiteralPath $payloadFile -Force
 
 $streamText = $stream -join "`n"
-Assert-True ($streamText -match "CYBERAI_LOCAL_OK") "Expected model response marker not found."
+function Get-StreamTextDelta([string] $SseText) {
+    $builder = [System.Text.StringBuilder]::new()
+    foreach ($line in ($SseText -split "`n")) {
+        if (-not $line.StartsWith("data: ")) {
+            continue
+        }
+        $data = $line.Substring(6).Trim()
+        if ($data -eq "[DONE]" -or -not $data.StartsWith("{")) {
+            continue
+        }
+        $event = $data | ConvertFrom-Json
+        if ($event.event -eq "delta") {
+            [void] $builder.Append([string] $event.text)
+        }
+    }
+    return $builder.ToString()
+}
+
+$responseText = Get-StreamTextDelta $streamText
+Assert-True ($responseText -match "CYBERAI_LOCAL_OK") "Expected model response marker not found."
 Assert-True (-not ($streamText -match "MockModelProvider|mock-analyst")) "Stream indicates mock provider/model."
 
 $usage = docker exec cyberai-postgres psql -U cyberai -d cyberai -tA -c `

@@ -151,6 +151,8 @@ class OpenAICompatibleModelProvider:
         }
         if request.stop:
             payload["stop"] = list(request.stop)
+        if self._settings.keep_alive:
+            payload["keep_alive"] = self._settings.keep_alive
         return payload
 
     def _headers(self) -> dict[str, str]:

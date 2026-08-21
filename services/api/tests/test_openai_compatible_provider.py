@@ -87,11 +87,31 @@ async def test_openai_compatible_provider_streams_sse_events() -> None:
     assert payload["stream"] is True
     assert payload["stream_options"] == {"include_usage": True}
     assert payload["messages"] == [{"role": "user", "content": "hello"}]
+    assert "keep_alive" not in payload
     assert events[:2] == [TextDelta(text="hel"), TextDelta(text="lo")]
     assert isinstance(events[-1], StreamCompleted)
     assert events[-1].finish_reason is FinishReason.STOP
     assert events[-1].usage.input_tokens == 3
     assert events[-1].usage.output_tokens == 2
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_provider_sends_configured_keep_alive() -> None:
+    captured_request: httpx.Request | None = None
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_request
+        captured_request = request
+        body = 'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n'
+        return httpx.Response(200, content=(body + "data: [DONE]\n\n").encode())
+
+    settings = _settings().model_copy(update={"keep_alive": "30m"})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenAICompatibleModelProvider(settings, client=client)
+        await _collect(provider)
+
+    assert captured_request is not None
+    assert json.loads(captured_request.content)["keep_alive"] == "30m"
 
 
 @pytest.mark.asyncio

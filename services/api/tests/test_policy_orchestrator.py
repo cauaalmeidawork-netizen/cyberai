@@ -75,7 +75,7 @@ async def test_rag_policy_removes_malicious_retrieved_context() -> None:
 
 
 @pytest.mark.asyncio
-async def test_output_policy_buffers_deltas_until_final_decision_and_blocks_unsafe_output() -> None:
+async def test_output_policy_streams_safe_deltas_and_blocks_before_unsafe_delta() -> None:
     metrics = InMemoryMetricsRecorder()
     gateway = RecordingGateway(
         [
@@ -86,17 +86,19 @@ async def test_output_policy_buffers_deltas_until_final_decision_and_blocks_unsa
     )
     orchestrator = OrchestratorService(gateway, policy_engine=PolicyEngine(), metrics=metrics)
 
+    streamed: list[GatewayEvent] = []
     with pytest.raises(UnsafeOutputError):
-        async for _event in orchestrator.stream_chat(
+        async for event in orchestrator.stream_chat(
             messages=(Message(Role.USER, "hello"),),
             model=None,
             max_tokens=64,
             temperature=0.2,
             principal=RequestPrincipal(request_id="req-output-deny"),
         ):
-            raise AssertionError("output policy must not yield unsafe buffered deltas")
+            streamed.append(event)
 
     assert gateway.called is True
+    assert streamed == [TextDelta("first partial ")]
     assert any(sample.name == "policy_denied_total" for sample in metrics.samples)
 
 

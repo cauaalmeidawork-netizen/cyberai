@@ -313,18 +313,48 @@ class OrchestratorService:
         *,
         rag_enabled: bool,
     ) -> AsyncIterator[GatewayEvent]:
-        # M7 limitation: output policy is applied to a full buffered response.
-        # No TextDelta is emitted to the client until the final policy decision.
-        # Provider TTFT and latency remain recorded inside Inference/ModelGateway
-        # and are not the same as client-perceived time to first byte.
         started: CompletionStarted | None = None
         completed: CompletionCompleted | None = None
+        emitted_text = ""
         output_parts: list[str] = []
         async for event in self._model_gateway.stream(request):
             if isinstance(event, CompletionStarted):
                 started = event
+                yield event
             elif isinstance(event, TextDelta):
                 output_parts.append(event.text)
+                candidate_text = "".join(output_parts)
+                decision = self._policy_engine.evaluate(
+                    self._policy_context(
+                        principal=principal,
+                        stage=PolicyStage.OUTPUT,
+                        model_key=model_key,
+                        provider_key=(started.provider if started is not None else None),
+                        rag_enabled=rag_enabled,
+                    ),
+                    candidate_text,
+                )
+                self._record_policy_metrics("output", decision.decision.value, decision.violations)
+                await self._audit_policy_decision(
+                    principal=principal,
+                    decision=decision,
+                    stage="output",
+                    source_type="model_output",
+                )
+                if decision.decision is PolicyDecisionType.DENY:
+                    raise UnsafeOutputError()
+                candidate_to_emit = (
+                    decision.sanitized_content
+                    if decision.decision is PolicyDecisionType.SANITIZE
+                    and decision.sanitized_content is not None
+                    else candidate_text
+                )
+                if not candidate_to_emit.startswith(emitted_text):
+                    raise UnsafeOutputError()
+                delta = candidate_to_emit[len(emitted_text) :]
+                if delta:
+                    emitted_text = candidate_to_emit
+                    yield TextDelta(text=delta)
             elif isinstance(event, CompletionCompleted):
                 completed = event
 
@@ -355,10 +385,11 @@ class OrchestratorService:
             and decision.sanitized_content is not None
             else output_text
         )
-        if started is not None:
-            yield started
-        if final_text:
-            yield TextDelta(text=final_text)
+        if not final_text.startswith(emitted_text):
+            raise UnsafeOutputError()
+        final_delta = final_text[len(emitted_text) :]
+        if final_delta:
+            yield TextDelta(text=final_delta)
         yield completed or self._fallback_completion(principal)
 
     def _fallback_completion(self, principal: RequestPrincipal) -> CompletionCompleted:

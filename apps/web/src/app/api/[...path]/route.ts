@@ -36,6 +36,7 @@ async function proxy(request: Request, context: RouteContext): Promise<Response>
     method: request.method,
     headers: requestHeaders,
     body: hasBody ? await request.arrayBuffer() : undefined,
+    signal: request.signal,
     redirect: "manual",
     cache: "no-store",
   });

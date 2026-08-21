@@ -34,6 +34,7 @@ export interface ChatMessage {
   content: string;
   tokens_used?: number | null;
   created_at?: string;
+  isPending?: boolean;
 }
 
 export interface ChatCompletionPayload {
@@ -142,4 +143,9 @@ export type ChatStreamEvent =
         input_tokens: number;
         output_tokens: number;
       };
+    }
+  | {
+      event: "error";
+      message: string;
+      code?: string;
     };

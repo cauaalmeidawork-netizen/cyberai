@@ -14,7 +14,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, RefObject, useCallback, useEffect, useRef, useState } from "react";
 
 import { createApiClient, ApiError } from "@/lib/api/client";
 import { streamConversationMessage } from "@/lib/api/stream";
@@ -54,6 +54,7 @@ const EMPTY_WORKSPACE: WorkspaceState = {
   limits: null,
   usage: null,
 };
+const MAX_CHAT_CONTEXT_MESSAGES = 4;
 
 export function ProductApp() {
   const [authState, setAuthState] = useState<AuthState>("loading");
@@ -119,6 +120,10 @@ export function ProductApp() {
   const selectedMessages = selectedConversationId
     ? messagesByConversation[selectedConversationId] ?? []
     : [];
+  const lastMessageContent =
+    selectedMessages.length > 0 ? selectedMessages[selectedMessages.length - 1]?.content : "";
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const [isNearMessageBottom, setIsNearMessageBottom] = useState(true);
 
   const handleApiError = useCallback((error: unknown) => {
     if (error instanceof ApiError) {
@@ -347,21 +352,33 @@ export function ProductApp() {
       return;
     }
 
-    const userMessage: ChatMessage = { role: "user", content: draft.trim() };
+    const idempotencyKey = createIdempotencyKey();
+    const userMessage: ChatMessage = {
+      id: `local-user-${idempotencyKey}`,
+      role: "user",
+      content: draft.trim(),
+    };
+    const assistantMessage: ChatMessage = {
+      id: `local-assistant-${idempotencyKey}`,
+      role: "assistant",
+      content: "",
+      isPending: true,
+    };
     const conversationId = selectedConversationId;
     const existingMessages = messagesByConversation[conversationId] ?? [];
-    const nextMessages = [...existingMessages, userMessage];
+    const requestMessages = buildChatRequestMessages(existingMessages, userMessage);
+    const displayMessages = [...existingMessages, userMessage];
     setMessagesByConversation((current) => ({
       ...current,
-      [conversationId]: nextMessages,
+      [conversationId]: [...displayMessages, assistantMessage],
     }));
+    setIsNearMessageBottom(true);
     setDraft("");
     setIsSending(true);
     setNotice(null);
 
     const controller = new AbortController();
     streamAbortRef.current = controller;
-    const idempotencyKey = createIdempotencyKey();
 
     try {
       let assistantContent = "";
@@ -372,7 +389,7 @@ export function ProductApp() {
         idempotencyKey,
         signal: controller.signal,
         payload: {
-          messages: nextMessages.map((message) => ({
+          messages: requestMessages.map((message) => ({
             role: message.role,
             content: message.content,
           })),
@@ -387,16 +404,33 @@ export function ProductApp() {
           setMessagesByConversation((current) => ({
             ...current,
             [conversationId]: [
-              ...nextMessages,
-              { role: "assistant", content: assistantContent },
+              ...displayMessages,
+              {
+                ...assistantMessage,
+                content: assistantContent,
+                isPending: false,
+              },
+            ],
+          }));
+        } else if (event.event === "completed") {
+          setMessagesByConversation((current) => ({
+            ...current,
+            [conversationId]: [
+              ...displayMessages,
+              {
+                ...assistantMessage,
+                content: assistantContent,
+                isPending: false,
+              },
             ],
           }));
         }
       }
     } catch (error) {
+      const aborted = error instanceof DOMException && error.name === "AbortError";
       setMessagesByConversation((current) => ({
         ...current,
-        [conversationId]: existingMessages,
+        [conversationId]: aborted ? displayMessages : existingMessages,
       }));
       handleApiError(error);
     } finally {
@@ -408,6 +442,44 @@ export function ProductApp() {
   function handleStopGeneration() {
     streamAbortRef.current?.abort();
   }
+
+  const handleMessageScroll = useCallback(() => {
+    const element = messagesViewportRef.current;
+    if (!element) {
+      return;
+    }
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    setIsNearMessageBottom(distanceFromBottom < 96);
+  }, []);
+
+  const scrollMessagesToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const element = messagesViewportRef.current;
+    if (!element) {
+      return;
+    }
+    if (typeof element.scrollTo === "function") {
+      element.scrollTo({ top: element.scrollHeight, behavior });
+    } else {
+      element.scrollTop = element.scrollHeight;
+    }
+    setIsNearMessageBottom(true);
+  }, []);
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => scrollMessagesToBottom("auto"));
+  }, [selectedConversationId, scrollMessagesToBottom]);
+
+  useEffect(() => {
+    if (!isNearMessageBottom) {
+      return;
+    }
+    window.requestAnimationFrame(() => scrollMessagesToBottom("smooth"));
+  }, [
+    isNearMessageBottom,
+    selectedMessages.length,
+    lastMessageContent,
+    scrollMessagesToBottom,
+  ]);
 
   async function handleCreateDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -627,29 +699,14 @@ export function ProductApp() {
           {notice && <InlineNotice message={notice} requestId={lastRequestId} />}
           {loadState === "loading" ? <SkeletonLines /> : null}
 
-          <div className="message-stream" aria-live="polite">
-            {!selectedConversation ? (
-              <div className="empty-panel">
-                <Bot size={22} aria-hidden />
-                <p>Select or create a conversation.</p>
-              </div>
-            ) : selectedMessages.length === 0 ? (
-              <div className="empty-panel">
-                <Bot size={22} aria-hidden />
-                <p>Ask a defensive security question to start this thread.</p>
-              </div>
-            ) : (
-              selectedMessages.map((message, index) => (
-                <article
-                  className={`message ${message.role}`}
-                  key={message.id ?? `${message.role}-${index}`}
-                >
-                  <span className="message-role">{message.role}</span>
-                  <p>{message.content}</p>
-                </article>
-              ))
-            )}
-          </div>
+          <MessageStream
+            hasConversation={Boolean(selectedConversation)}
+            isNearBottom={isNearMessageBottom}
+            messages={selectedMessages}
+            onScroll={handleMessageScroll}
+            onScrollToBottom={() => scrollMessagesToBottom("smooth")}
+            viewportRef={messagesViewportRef}
+          />
 
           <form className="composer" onSubmit={handleSendMessage}>
             <textarea
@@ -813,6 +870,59 @@ function InlineNotice({ message, requestId }: { message: string; requestId: stri
   );
 }
 
+function MessageStream({
+  hasConversation,
+  isNearBottom,
+  messages,
+  onScroll,
+  onScrollToBottom,
+  viewportRef,
+}: {
+  hasConversation: boolean;
+  isNearBottom: boolean;
+  messages: ChatMessage[];
+  onScroll: () => void;
+  onScrollToBottom: () => void;
+  viewportRef: RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div className="message-stream-shell">
+      <div className="message-stream" aria-live="polite" onScroll={onScroll} ref={viewportRef}>
+        {!hasConversation ? (
+          <div className="empty-panel">
+            <Bot size={22} aria-hidden />
+            <p>Select or create a conversation.</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="empty-panel">
+            <Bot size={22} aria-hidden />
+            <p>Ask a defensive security question to start this thread.</p>
+          </div>
+        ) : (
+          messages.map((message, index) => (
+            <article
+              className={`message ${message.role} ${message.isPending ? "pending" : ""}`}
+              key={message.id ?? `${message.role}-${index}`}
+            >
+              <span className="message-role">{message.role}</span>
+              {message.isPending && !message.content ? (
+                <p className="thinking-indicator">Thinking...</p>
+              ) : (
+                <p>{message.content}</p>
+              )}
+            </article>
+          ))
+        )}
+      </div>
+      {!isNearBottom && messages.length > 0 ? (
+        <button className="scroll-bottom-button" type="button" onClick={onScrollToBottom}>
+          Scroll to bottom
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function SkeletonLines() {
   return (
     <div className="skeleton-stack" aria-label="Loading workspace">
@@ -845,6 +955,14 @@ function createIdempotencyKey(): string {
     return globalThis.crypto.randomUUID();
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function buildChatRequestMessages(
+  existingMessages: ChatMessage[],
+  userMessage: ChatMessage,
+): ChatMessage[] {
+  const durableMessages = existingMessages.filter((message) => !message.isPending);
+  return [...durableMessages.slice(-MAX_CHAT_CONTEXT_MESSAGES + 1), userMessage];
 }
 
 function messageForApiError(error: ApiError): string {

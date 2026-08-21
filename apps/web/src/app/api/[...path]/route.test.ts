@@ -13,13 +13,14 @@ describe("Next API proxy", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { GET } = await import("./route");
 
-    await GET(new Request("http://localhost:3000/api/v1/models"), {
+    const request = new Request("http://localhost:3000/api/v1/models");
+    await GET(request, {
       params: Promise.resolve({ path: ["v1", "models"] }),
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
       new URL("http://localhost:8001/api/v1/models"),
-      expect.objectContaining({ method: "GET" }),
+      expect.objectContaining({ method: "GET", signal: request.signal }),
     );
   });
 

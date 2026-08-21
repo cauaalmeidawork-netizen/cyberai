@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ProductApp } from "./product-app";
+import { buildChatRequestMessages, ProductApp } from "./product-app";
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -59,6 +59,27 @@ function streamResponse(text: string): Response {
   return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
+function delayedStreamResponse(text: string): Response {
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      controller.enqueue(
+        encoder.encode('data: {"event":"started","model":"mock-chat","is_fallback":false}\n\n'),
+      );
+      await new Promise((resolve) => window.setTimeout(resolve, 40));
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "delta", text })}\n\n`));
+      controller.enqueue(
+        encoder.encode(
+          'data: {"event":"completed","finish_reason":"stop","usage":{"input_tokens":6,"output_tokens":3}}\n\n',
+        ),
+      );
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+}
+
 describe("product app", () => {
   beforeEach(() => {
     document.cookie = "cyberai_csrf=csrf-token";
@@ -76,6 +97,20 @@ describe("product app", () => {
     });
     expect(screen.getByText("Plan pro")).toBeInTheDocument();
     expect(screen.getByText("Test Org")).toBeInTheDocument();
+  });
+
+  it("limits model request context to recent durable messages", () => {
+    const existing = Array.from({ length: 30 }, (_, index) => ({
+      role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+      content: `message-${index}`,
+    }));
+    const userMessage = { role: "user" as const, content: "latest" };
+
+    const requestMessages = buildChatRequestMessages(existing, userMessage);
+
+    expect(requestMessages).toHaveLength(4);
+    expect(requestMessages[0].content).toBe("message-27");
+    expect(requestMessages.at(-1)).toEqual(userMessage);
   });
 
   it("selects the backend default model instead of the first catalog entry", async () => {
@@ -170,6 +205,45 @@ describe("product app", () => {
     await userEvent.click(screen.getByRole("button", { name: /Send/i }));
 
     expect(await screen.findByText("Use least privilege and review detections.")).toBeInTheDocument();
+  });
+
+  it("shows an assistant generation state immediately while waiting for the first delta", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const base = await workspaceFetch(input, init);
+        if (base.status !== 404) {
+          return base;
+        }
+        if (url.endsWith("/api/v1/projects/project-1/conversations") && init?.method === "POST") {
+          return jsonResponse({
+            id: "conversation-1",
+            project_id: "project-1",
+            title: "Threat review",
+          });
+        }
+        if (url.endsWith("/api/v1/projects/project-1/conversations/conversation-1/messages")) {
+          return delayedStreamResponse("First streamed token");
+        }
+        return jsonResponse({}, 404);
+      }),
+    );
+
+    render(<ProductApp />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("IR Triage").length).toBeGreaterThan(0);
+    });
+    await userEvent.type(screen.getByPlaceholderText("Conversation title"), "Threat review");
+    await userEvent.click(screen.getByRole("button", { name: /New conversation/i }));
+    await userEvent.type(await screen.findByPlaceholderText(/Ask about detection/i), "Hello");
+    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+
+    expect(screen.getByText("Hello")).toBeInTheDocument();
+    expect(screen.getByText("Thinking...")).toBeInTheDocument();
+
+    expect(await screen.findByText("First streamed token")).toBeInTheDocument();
   });
 
   it("ingests and deletes text documents through the existing JSON document API", async () => {

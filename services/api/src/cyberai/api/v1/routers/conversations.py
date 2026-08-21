@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import uuid
@@ -261,36 +262,117 @@ async def stream_conversation_messages(
         else None
     )
 
+    result = _stream_live_completion(
+        orchestrator=orchestrator,
+        messages=messages,
+        payload=payload,
+        principal=principal,
+        retriever=retriever,
+        db=db,
+        org_id=user.org_id,
+        project_id=project_id,
+        conversation_id=conversation_id,
+        idempotency_key=normalized_key,
+        request_hash=request_hash,
+    )
+    return StreamingResponse(result, media_type="text/event-stream")
+
+
+async def _stream_live_completion(
+    *,
+    orchestrator: Any,
+    messages: tuple[InferenceMessage, ...],
+    payload: ChatCompletionRequestPayload,
+    principal: RequestPrincipal,
+    retriever: ProjectRagRetriever | None,
+    db: Database,
+    org_id: uuid.UUID,
+    project_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    idempotency_key: str | None,
+    request_hash: str,
+) -> AsyncIterator[str]:
+    started: dict[str, Any] | None = None
+    completed: dict[str, Any] | None = None
+    assistant_parts: list[str] = []
+
     try:
-        result = await _collect_completion(
-            orchestrator=orchestrator,
+        async for event in orchestrator.stream_chat(
             messages=messages,
-            payload=payload,
+            model=payload.model,
+            max_tokens=payload.max_tokens,
+            temperature=payload.temperature,
             principal=principal,
             retriever=retriever,
+        ):
+            if isinstance(event, CompletionStarted):
+                started = {
+                    "event": "started",
+                    "model": event.model_key,
+                    "is_fallback": event.is_fallback,
+                }
+                yield _sse(started)
+            elif isinstance(event, TextDelta):
+                assistant_parts.append(event.text)
+                yield _sse({"event": "delta", "text": event.text})
+            elif isinstance(event, CompletionCompleted):
+                completed = {
+                    "event": "completed",
+                    "finish_reason": event.finish_reason.value,
+                    "usage": {
+                        "input_tokens": event.usage.input_tokens,
+                        "output_tokens": event.usage.output_tokens,
+                    },
+                    "model": event.model_key,
+                    "provider": event.provider,
+                }
+
+        if completed is None:
+            raise HTTPException(status_code=503, detail="Provider did not complete the response")
+
+        chat_result = ChatCompletionResult(
+            started=started,
+            assistant_content="".join(assistant_parts),
+            completed=completed,
         )
         await _persist_chat_result(
             db=db,
-            org_id=user.org_id,
+            org_id=org_id,
             project_id=project_id,
             conversation_id=conversation_id,
             payload=payload,
-            idempotency_key=normalized_key,
+            idempotency_key=idempotency_key,
             request_hash=request_hash,
-            result=result,
+            result=chat_result,
         )
-    except Exception:
-        if normalized_key is not None:
+        yield _sse(
+            {
+                "event": "completed",
+                "finish_reason": completed["finish_reason"],
+                "usage": completed["usage"],
+            }
+        )
+        yield "data: [DONE]\n\n"
+    except asyncio.CancelledError:
+        if idempotency_key is not None:
             await _mark_idempotency_failed(
                 db=db,
-                org_id=user.org_id,
+                org_id=org_id,
                 conversation_id=conversation_id,
-                key=normalized_key,
+                key=idempotency_key,
                 request_hash=request_hash,
             )
         raise
-
-    return _streaming_response(result)
+    except Exception:
+        if idempotency_key is not None:
+            await _mark_idempotency_failed(
+                db=db,
+                org_id=org_id,
+                conversation_id=conversation_id,
+                key=idempotency_key,
+                request_hash=request_hash,
+            )
+        raise
 
 
 async def _project_or_404(

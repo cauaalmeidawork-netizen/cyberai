@@ -41,6 +41,22 @@ function Wait-HttpOk([string] $Url, [int] $TimeoutSeconds) {
     throw "Timed out waiting for $Url."
 }
 
+function Invoke-OllamaKeepAlive {
+    $body = @{
+        model = "qwen2.5:3b"
+        prompt = ""
+        stream = $false
+        keep_alive = "30m"
+    } | ConvertTo-Json -Compress
+    Invoke-RestMethod `
+        -Uri "http://127.0.0.1:11434/api/generate" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Body $body `
+        -TimeoutSec 30 | Out-Null
+    Write-Step "Ollama model qwen2.5:3b is loaded with keep_alive=30m."
+}
+
 function New-LocalSecret {
     $bytes = [byte[]]::new(32)
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -52,9 +68,35 @@ function New-LocalSecret {
     return -join ($bytes | ForEach-Object { $_.ToString("x2") })
 }
 
+function Set-LocalEnvValue([string] $Path, [string] $Name, [string] $Value) {
+    $line = "$Name=$Value"
+    if (-not (Test-Path $Path)) {
+        Set-Content -NoNewline -Encoding utf8 $Path $line
+        return
+    }
+    $lines = @(Get-Content $Path -ErrorAction SilentlyContinue)
+    $updated = $false
+    $nextLines = $lines | ForEach-Object {
+        if ($_ -match "^$([regex]::Escape($Name))=") {
+            $updated = $true
+            $line
+        } else {
+            $_
+        }
+    }
+    if (-not $updated) {
+        $nextLines += $line
+    }
+    Set-Content -Encoding utf8 $Path $nextLines
+}
+
 function Ensure-ApiEnv {
     $envPath = Join-Path $ApiDir ".env"
     if (Test-Path $envPath) {
+        Set-LocalEnvValue $envPath "CYBERAI_REDIS__URL" "redis://127.0.0.1:6379/0"
+        Set-LocalEnvValue $envPath "CYBERAI_REDIS__SOCKET_TIMEOUT_SECONDS" "0.25"
+        Set-LocalEnvValue $envPath "CYBERAI_REDIS__SOCKET_CONNECT_TIMEOUT_SECONDS" "0.25"
+        Set-LocalEnvValue $envPath "CYBERAI_OPENAI_COMPATIBLE__KEEP_ALIVE" "30m"
         return
     }
     $sessionSecret = New-LocalSecret
@@ -65,7 +107,9 @@ CYBERAI_DEBUG=true
 CYBERAI_LOGGING__LEVEL=DEBUG
 CYBERAI_LOGGING__FORMAT=console
 CYBERAI_DATABASE__URL=postgresql+asyncpg://cyberai:cyberai_dev_password@localhost:5432/cyberai
-CYBERAI_REDIS__URL=redis://localhost:6379/0
+CYBERAI_REDIS__URL=redis://127.0.0.1:6379/0
+CYBERAI_REDIS__SOCKET_TIMEOUT_SECONDS=0.25
+CYBERAI_REDIS__SOCKET_CONNECT_TIMEOUT_SECONDS=0.25
 CYBERAI_APP__CORS_ORIGINS=["http://localhost:3000"]
 CYBERAI_APP__TRUSTED_HOSTS=["localhost","127.0.0.1","testserver"]
 CYBERAI_APP__EXPOSE_DOCS=true
@@ -83,6 +127,7 @@ CYBERAI_OPENAI_COMPATIBLE__BASE_URL=http://localhost:11434/v1
 CYBERAI_OPENAI_COMPATIBLE__MODEL=qwen2.5:3b
 CYBERAI_OPENAI_COMPATIBLE__MODEL_KEY=openai-compatible-chat
 CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME=Qwen 2.5 3B Local
+CYBERAI_OPENAI_COMPATIBLE__KEEP_ALIVE=30m
 CYBERAI_MODELS__DEFAULT_MODEL=openai-compatible-chat
 CYBERAI_MODELS__FALLBACK_MODELS=[]
 CYBERAI_BILLING__ENABLED=true
@@ -161,6 +206,7 @@ try {
 if (-not (@($models.data) | Where-Object { $_.id -eq "qwen2.5:3b" })) {
     throw "Ollama is reachable, but model qwen2.5:3b is not installed. Run: ollama pull qwen2.5:3b"
 }
+Invoke-OllamaKeepAlive
 
 Ensure-ApiEnv
 Ensure-WebEnv
