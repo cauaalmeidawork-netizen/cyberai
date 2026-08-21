@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const apiProxyTarget =
+  process.env.API_PROXY_TARGET ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -9,15 +12,15 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${apiBaseUrl}/api/:path*`,
+        destination: `${apiProxyTarget}/api/:path*`,
       },
       {
         source: "/healthz",
-        destination: `${apiBaseUrl}/healthz`,
+        destination: `${apiProxyTarget}/healthz`,
       },
       {
         source: "/readyz",
-        destination: `${apiBaseUrl}/readyz`,
+        destination: `${apiProxyTarget}/readyz`,
       },
     ];
   },
