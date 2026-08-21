@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from cyberai.api.deps import ModelCatalogDep
+from cyberai.api.deps import ModelCatalogDep, SettingsDep
 
 router = APIRouter(tags=["models"])
 
@@ -29,7 +29,9 @@ class ModelListResponse(BaseModel):
 
 
 @router.get("/models", response_model=ModelListResponse, summary="List available models")
-async def list_models(catalog: ModelCatalogDep) -> ModelListResponse:
+async def list_models(catalog: ModelCatalogDep, settings: SettingsDep) -> ModelListResponse:
+    models = catalog.list_all()
+    models.sort(key=lambda model: model.key != settings.models.default_model)
     return ModelListResponse(
         data=[
             ModelInfo(
@@ -40,6 +42,6 @@ async def list_models(catalog: ModelCatalogDep) -> ModelListResponse:
                 max_output_tokens=model.max_output_tokens,
                 tasks=sorted(task.value for task in model.tasks),
             )
-            for model in catalog.list_all()
+            for model in models
         ]
     )
