@@ -3,6 +3,26 @@
 import { useEffect, useState } from "react";
 
 import { ProductApp } from "@/features/app/product-app";
+import { createApiClient } from "@/lib/api/client";
+import type { Conversation, Project } from "@/types/api";
+
+async function ensureStarterWorkspace() {
+  const client = createApiClient({ baseUrl: "" });
+  const projects = await client.get<Project[]>("/api/v1/projects");
+
+  if (projects.length > 0) {
+    return;
+  }
+
+  const project = await client.post<Project>("/api/v1/projects", {
+    name: "General",
+    description: "Default workspace",
+  });
+
+  await client.post<Conversation>(`/api/v1/projects/${project.id}/conversations`, {
+    title: "New conversation",
+  });
+}
 
 export function AuthEntry() {
   const [ready, setReady] = useState(false);
@@ -14,7 +34,7 @@ export function AuthEntry() {
       credentials: "include",
       headers: { Accept: "application/json" },
     })
-      .then((response) => {
+      .then(async (response) => {
         if (cancelled) return;
 
         const currentUrl = new URL(window.location.href);
@@ -30,7 +50,17 @@ export function AuthEntry() {
           window.history.replaceState({}, "", currentUrl.pathname + currentUrl.search + currentUrl.hash);
         }
 
-        setReady(true);
+        if (response.ok) {
+          try {
+            await ensureStarterWorkspace();
+          } catch {
+            // ProductApp still renders manual project/conversation controls if bootstrap fails.
+          }
+        }
+
+        if (!cancelled) {
+          setReady(true);
+        }
       })
       .catch(() => {
         if (!cancelled) setReady(true);
