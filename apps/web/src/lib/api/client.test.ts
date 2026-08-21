@@ -7,11 +7,10 @@ describe("api client", () => {
     vi.restoreAllMocks();
   });
 
-  it("sends bearer auth and parses json responses", async () => {
+  it("sends cookie credentials without bearer auth and parses json responses", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(init?.headers).toMatchObject({
-        Authorization: "Bearer test-token",
-      });
+      expect(init?.credentials).toBe("include");
+      expect(init?.headers).not.toMatchObject({ Authorization: expect.any(String) });
       return new Response(JSON.stringify({ data: [{ key: "mock" }] }), {
         status: 200,
         headers: { "content-type": "application/json", "x-request-id": "req-1" },
@@ -19,7 +18,6 @@ describe("api client", () => {
     });
     const client = createApiClient({
       baseUrl: "https://api.example.test",
-      getToken: () => "test-token",
       fetchImpl: fetchMock,
     });
 
@@ -35,7 +33,6 @@ describe("api client", () => {
   it("turns problem json into typed errors with request ids", async () => {
     const client = createApiClient({
       baseUrl: "",
-      getToken: () => "test-token",
       fetchImpl: async () =>
         new Response(
           JSON.stringify({
@@ -61,7 +58,6 @@ describe("api client", () => {
     const onUnauthorized = vi.fn();
     const client = createApiClient({
       baseUrl: "",
-      getToken: () => "expired-token",
       onUnauthorized,
       fetchImpl: async () =>
         new Response(JSON.stringify({ detail: "Token expired", code: "http_401" }), {
@@ -73,5 +69,24 @@ describe("api client", () => {
     await expect(client.get("/api/v1/projects")).rejects.toBeInstanceOf(ApiError);
 
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds csrf token from cookie on unsafe requests", async () => {
+    document.cookie = "cyberai_csrf=csrf-token";
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    const client = createApiClient({
+      baseUrl: "",
+      fetchImpl: fetchMock,
+    });
+
+    await client.post("/api/v1/auth/logout", {});
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/auth/logout",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-CSRF-Token": "csrf-token" }),
+        credentials: "include",
+      }),
+    );
   });
 });

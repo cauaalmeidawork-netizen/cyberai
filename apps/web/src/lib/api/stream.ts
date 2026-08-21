@@ -1,4 +1,4 @@
-import { ApiError, buildUrl, responseToApiError } from "./client";
+import { ApiError, buildUrl, readCookie, responseToApiError } from "./client";
 
 import type { ChatCompletionPayload, ChatStreamEvent } from "@/types/api";
 
@@ -6,7 +6,6 @@ type FetchLike = typeof fetch;
 
 export interface StreamConversationMessageOptions {
   baseUrl: string;
-  token: string;
   projectId: string;
   conversationId: string;
   idempotencyKey?: string;
@@ -27,11 +26,12 @@ export async function* streamConversationMessage(
     {
       method: "POST",
       signal: options.signal,
+      credentials: "include",
       headers: {
         Accept: "text/event-stream",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${options.token}`,
         ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
+        ...csrfHeader(),
       },
       body: JSON.stringify(options.payload),
     },
@@ -79,6 +79,11 @@ export async function* streamConversationMessage(
   } finally {
     reader.releaseLock();
   }
+}
+
+function csrfHeader(): Record<string, string> {
+  const token = readCookie("cyberai_csrf");
+  return token ? { "X-CSRF-Token": token } : {};
 }
 
 function parseSseBlock(block: string): ChatStreamEvent | "done" | null {

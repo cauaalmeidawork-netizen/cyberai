@@ -4,7 +4,6 @@ type FetchLike = typeof fetch;
 
 export interface ApiClientOptions {
   baseUrl: string;
-  getToken: () => string | null;
   onUnauthorized?: () => void;
   fetchImpl?: FetchLike;
 }
@@ -49,7 +48,8 @@ export function createApiClient(options: ApiClientOptions) {
     const response = await fetchImpl(buildUrl(options.baseUrl, path), {
       method,
       signal: requestOptions.signal,
-      headers: buildHeaders(options.getToken(), body !== undefined),
+      credentials: "include",
+      headers: buildHeaders(method, body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
     });
 
@@ -114,15 +114,30 @@ export async function responseToApiError(response: Response): Promise<ApiError> 
   });
 }
 
-function buildHeaders(token: string | null, hasBody: boolean): HeadersInit {
+function buildHeaders(method: string, hasBody: boolean): HeadersInit {
   const headers: Record<string, string> = {
     Accept: "application/json",
   };
   if (hasBody) {
     headers["Content-Type"] = "application/json";
   }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  if (method !== "GET") {
+    const csrfToken = readCookie("cyberai_csrf");
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
   }
   return headers;
+}
+
+export function readCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const prefix = `${encodeURIComponent(name)}=`;
+  const cookie = document.cookie
+    .split(";")
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(prefix));
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
 }

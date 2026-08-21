@@ -25,7 +25,6 @@ describe("SSE chat client", () => {
     const events = [];
     for await (const event of streamConversationMessage({
       baseUrl: "",
-      token: "test-token",
       projectId: "project-1",
       conversationId: "conversation-1",
       payload: {
@@ -50,6 +49,7 @@ describe("SSE chat client", () => {
   });
 
   it("sends idempotency and RAG intent separately from request correlation", async () => {
+    document.cookie = "cyberai_csrf=csrf-token";
     const fetchImpl = vi.fn(
       async () =>
         new Response(
@@ -65,7 +65,6 @@ describe("SSE chat client", () => {
 
     for await (const _event of streamConversationMessage({
       baseUrl: "",
-      token: "test-token",
       projectId: "project-1",
       conversationId: "conversation-1",
       idempotencyKey: "turn-key-1",
@@ -84,9 +83,10 @@ describe("SSE chat client", () => {
       "/api/v1/projects/project-1/conversations/conversation-1/messages",
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "Bearer test-token",
           "Idempotency-Key": "turn-key-1",
+          "X-CSRF-Token": "csrf-token",
         }),
+        credentials: "include",
         body: JSON.stringify({
           messages: [{ role: "user", content: "hello" }],
           max_tokens: 256,

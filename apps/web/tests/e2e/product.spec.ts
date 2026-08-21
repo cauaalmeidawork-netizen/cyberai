@@ -11,6 +11,41 @@ test("beta product flow persists chat history across reload", async ({ page }) =
     const url = new URL(request.url());
     const path = url.pathname;
 
+    if (path === "/api/v1/auth/me") {
+      await route.fulfill({
+        json: {
+          user_id: "user-1",
+          active_org_id: "org-1",
+          membership_id: "membership-1",
+          role: "admin",
+          permissions: [
+            "project.read",
+            "project.write",
+            "conversation.read",
+            "conversation.write",
+            "document.read",
+            "document.write",
+            "billing.read",
+          ],
+          organizations: [
+            {
+              id: "membership-1",
+              org_id: "org-1",
+              org_slug: "test-org",
+              org_display_name: "Test Org",
+              role: "admin",
+              status: "active",
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (path === "/api/v1/auth/logout") {
+      expect(request.headers()["x-csrf-token"]).toBe("csrf-token");
+      await route.fulfill({ status: 204 });
+      return;
+    }
     if (path === "/api/v1/projects" && request.method() === "GET") {
       await route.fulfill({
         json: projectCreated
@@ -147,9 +182,14 @@ test("beta product flow persists chat history across reload", async ({ page }) =
     await route.fulfill({ status: 404, json: { detail: "Not found" } });
   });
 
+  await page.context().addCookies([
+    {
+      name: "cyberai_csrf",
+      value: "csrf-token",
+      url: "http://127.0.0.1:3000",
+    },
+  ]);
   await page.goto("/");
-  await page.getByLabel(/Bearer token/i).fill("external-token");
-  await page.getByRole("button", { name: /Connect/i }).click();
   await page.getByPlaceholder("Project name").fill("IR Triage");
   await page.getByPlaceholder("Description").fill("Beta smoke");
   await page.getByRole("button", { name: /Create project/i }).click();
@@ -173,5 +213,5 @@ test("beta product flow persists chat history across reload", async ({ page }) =
   await expect(page.getByText("Runbook")).toBeHidden();
 
   await page.getByRole("button", { name: /Logout/i }).click();
-  await expect(page.getByLabel(/Bearer token/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sign in with SSO/i })).toBeVisible();
 });

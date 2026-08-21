@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from cyberai.api.auth import CurrentUserDep
+from cyberai.api.auth import CurrentUserDep, Permission, require_permission
 from cyberai.api.deps import BillingRepositoryDep, PlanCatalogDep
 from cyberai.modules.billing.types import QuotaSnapshot
 
@@ -43,6 +43,7 @@ async def get_billing_limits(
     repository: BillingRepositoryDep,
     plan_catalog: PlanCatalogDep,
 ) -> BillingLimitsOut:
+    require_permission(user, Permission.BILLING_READ)
     subscription = await repository.get_subscription(user.org_id)
     plan = plan_catalog.get(subscription.plan_key)
     snapshots = await repository.snapshots(org_id=user.org_id, plan=plan)
@@ -63,6 +64,7 @@ async def get_billing_usage(
     repository: BillingRepositoryDep,
     plan_catalog: PlanCatalogDep,
 ) -> BillingUsageOut:
+    require_permission(user, Permission.BILLING_READ)
     subscription = await repository.get_subscription(user.org_id)
     plan = plan_catalog.get(subscription.plan_key)
     snapshots = await repository.snapshots(org_id=user.org_id, plan=plan)

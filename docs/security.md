@@ -11,16 +11,22 @@
 
 ### Authentication
 
-- M0 uses a managed identity provider.
-- M1 introduces a local abstraction so Enterprise SSO (OIDC/SAML/SCIM) can be
-  plugged in later.
+- The product authenticates users through generic OIDC.
+- The browser receives only an opaque application session cookie; OIDC tokens
+  and refresh tokens are not exposed to frontend code.
+- Session cookies do not contain trusted authorization claims. The database
+  stores only a hash of the opaque session token.
+- Legacy Bearer authentication is restricted to local development and CI.
 - No passwords are stored in the application.
 
 ### Authorization
 
 - Multi-tenancy: shared database, shared schema, `org_id` column, PostgreSQL RLS.
 - Application code never trusts a client-supplied `org_id`.
+- Membership is the authority for the active organization, role and RBAC
+  permissions. `User.org_id` is retained only for migration compatibility.
 - Row Level Security is enabled and forced on tenant-scoped tables.
+- Organization switching is explicit and only allowed for active memberships.
 
 ### Input safety
 

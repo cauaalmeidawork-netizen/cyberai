@@ -30,7 +30,19 @@ Set `CYBERAI_ENVIRONMENT=production` or `staging` and provide explicit values:
 
 - `CYBERAI_DATABASE__URL`: PostgreSQL asyncpg URL.
 - `CYBERAI_REDIS__URL`: Redis URL for rate limiting and shared transient state.
-- `CYBERAI_AUTH__JWT_SECRET`: high-entropy secret from a secret manager.
+- `CYBERAI_AUTH__LEGACY_BEARER_ENABLED=false`: legacy Bearer auth is forbidden
+  in staging/production.
+- `CYBERAI_AUTH__OIDC_ENABLED=true`: enables real OIDC login.
+- `CYBERAI_AUTH__OIDC_ISSUER`: OIDC issuer used for discovery.
+- `CYBERAI_AUTH__OIDC_CLIENT_ID`: OIDC client id.
+- `CYBERAI_AUTH__OIDC_CLIENT_SECRET`: provider secret from a secret manager.
+- `CYBERAI_AUTH__OIDC_REDIRECT_URI`: backend callback URL.
+- `CYBERAI_AUTH__OIDC_AUTO_PROVISION_ENABLED=false`: production login requires
+  a previously authorized identity and active membership unless a controlled
+  bootstrap mode is explicitly introduced.
+- `CYBERAI_AUTH__SESSION_SECRET` and `CYBERAI_AUTH__CSRF_SECRET`:
+  high-entropy secrets from a secret manager.
+- `CYBERAI_AUTH__SESSION_SECURE_COOKIE=true`.
 - `CYBERAI_APP__CORS_ORIGINS`: exact browser origins.
 - `CYBERAI_APP__TRUSTED_HOSTS`: exact API hosts.
 - `CYBERAI_LOGGING__FORMAT=json`.
@@ -42,6 +54,8 @@ Set `CYBERAI_ENVIRONMENT=production` or `staging` and provide explicit values:
 
 Production and staging refuse to start with mock model defaults or fallbacks.
 Mock providers are only for local development, tests and CI.
+Production and staging also refuse to start when legacy Bearer authentication
+is enabled or OIDC/session secrets are missing.
 
 ## Health and Readiness
 

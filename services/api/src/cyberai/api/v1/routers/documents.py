@@ -5,13 +5,19 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cyberai.api.auth import CurrentUserDep
-from cyberai.api.deps import BillingRepositoryDep, DatabaseDep, MetricsDep, PlanCatalogDep
+from cyberai.api.auth import CurrentUserDep, Permission, require_csrf, require_permission
+from cyberai.api.deps import (
+    BillingRepositoryDep,
+    DatabaseDep,
+    MetricsDep,
+    PlanCatalogDep,
+    SettingsDep,
+)
 from cyberai.modules.billing.entitlements import EntitlementService
 from cyberai.modules.billing.errors import EntitlementDeniedError
 from cyberai.modules.rag.pipeline import IngestionPipeline
@@ -98,8 +104,12 @@ async def create_document(
     metrics: MetricsDep,
     billing_repository: BillingRepositoryDep,
     plan_catalog: PlanCatalogDep,
+    request: Request,
+    settings: SettingsDep,
 ) -> Document:
     """Upload and ingest a new document."""
+    require_permission(user, Permission.DOCUMENT_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
     await verify_project_access(db, project_id, user)
     subscription = await billing_repository.get_subscription(user.org_id)
     document_count_stmt = (
@@ -139,6 +149,7 @@ async def list_documents(
     db: DatabaseDep,
 ) -> list[Document]:
     """List all documents for a project."""
+    require_permission(user, Permission.DOCUMENT_READ)
     await verify_project_access(db, project_id, user)
 
     stmt = (
@@ -159,6 +170,7 @@ async def get_document(
     db: DatabaseDep,
 ) -> Document:
     """Get a specific document."""
+    require_permission(user, Permission.DOCUMENT_READ)
     await verify_project_access(db, project_id, user)
 
     stmt = select(Document).where(
@@ -180,8 +192,12 @@ async def delete_document(
     user: CurrentUserDep,
     db: DatabaseDep,
     metrics: MetricsDep,
+    request: Request,
+    settings: SettingsDep,
 ) -> None:
     """Delete a document and all its chunks."""
+    require_permission(user, Permission.DOCUMENT_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
     await verify_project_access(db, project_id, user)
 
     # Check if doc exists in project first
@@ -215,6 +231,7 @@ async def retrieve_chunks(
     metrics: MetricsDep,
 ) -> list[RetrievedChunkResponse]:
     """Test retrieval for a query in the RAG system."""
+    require_permission(user, Permission.DOCUMENT_READ)
     await verify_project_access(db, project_id, user)
 
     async with db.session(TenantContext(org_id=user.org_id)) as session:

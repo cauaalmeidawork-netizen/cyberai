@@ -108,7 +108,7 @@ def test_production_accepts_real_provider_and_disables_docs_by_default() -> None
         logging={"format": "json"},
         database={"url": "postgresql+asyncpg://cyberai:strong-secret@db.internal/cyberai"},
         redis={"url": "redis://redis.internal:6379/0"},
-        auth={"jwt_secret": "prod-jwt-secret-with-enough-entropy"},
+        auth=_prod_auth_settings(),
         app={
             "cors_origins": ["https://app.cyberai.example"],
             "trusted_hosts": ["api.cyberai.example"],
@@ -133,7 +133,7 @@ async def test_production_service_graph_does_not_register_mock_provider() -> Non
         logging={"format": "json"},
         database={"url": "postgresql+asyncpg://cyberai:strong-secret@db.internal/cyberai"},
         redis={"url": "redis://redis.internal:6379/0"},
-        auth={"jwt_secret": "prod-jwt-secret-with-enough-entropy"},
+        auth=_prod_auth_settings(),
         app={
             "cors_origins": ["https://app.cyberai.example"],
             "trusted_hosts": ["api.cyberai.example"],
@@ -155,6 +155,21 @@ async def test_production_service_graph_does_not_register_mock_provider() -> Non
 def test_mask_credentials_redacts_password() -> None:
     url = "postgresql+asyncpg://user:S3cr3t@db.internal:5432/cyberai"
     assert mask_credentials(url) == "postgresql+asyncpg://user:***@db.internal:5432/cyberai"
+
+
+def _prod_auth_settings() -> dict[str, object]:
+    return {
+        "jwt_secret": "prod-jwt-secret-with-enough-entropy",
+        "legacy_bearer_enabled": False,
+        "oidc_enabled": True,
+        "oidc_issuer": "https://idp.cyberai.example",
+        "oidc_client_id": "cyberai",
+        "oidc_client_secret": "prod-client-secret",
+        "oidc_redirect_uri": "https://api.cyberai.example/api/v1/auth/callback",
+        "session_secret": "prod-session-secret-with-enough-entropy",
+        "csrf_secret": "prod-csrf-secret-with-enough-entropy",
+        "session_secure_cookie": True,
+    }
 
 
 def test_uuid7_sortable_and_unique() -> None:

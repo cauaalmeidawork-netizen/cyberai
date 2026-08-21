@@ -98,6 +98,24 @@ export interface BillingUsage {
   usage: Quota[];
 }
 
+export interface OrganizationMembership {
+  id: string;
+  org_id: string;
+  org_slug: string;
+  org_display_name: string;
+  role: string;
+  status: string;
+}
+
+export interface AuthMe {
+  user_id: string;
+  active_org_id: string;
+  membership_id: string | null;
+  role: string;
+  permissions: string[];
+  organizations: OrganizationMembership[];
+}
+
 export type ChatStreamEvent =
   | {
       event: "started";

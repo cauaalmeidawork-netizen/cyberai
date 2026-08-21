@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from cyberai.api.auth import CurrentUserDep
-from cyberai.api.deps import DatabaseDep
+from cyberai.api.auth import CurrentUserDep, Permission, require_csrf, require_permission
+from cyberai.api.deps import DatabaseDep, SettingsDep
 from cyberai.platform.db.models import Project
 from cyberai.platform.db.tenant import TenantContext
 
@@ -33,8 +33,11 @@ async def list_projects(
     db: DatabaseDep,
 ) -> Any:
     """List all projects for the current tenant."""
+    require_permission(user, Permission.PROJECT_READ)
     async with db.session(TenantContext(org_id=user.org_id)) as session:
-        result = await session.execute(select(Project).order_by(Project.created_at.desc()))
+        result = await session.execute(
+            select(Project).where(Project.org_id == user.org_id).order_by(Project.created_at.desc())
+        )
         return [
             ProjectOut(id=str(p.id), name=p.name, description=p.description)
             for p in result.scalars()
@@ -46,8 +49,12 @@ async def create_project(
     payload: ProjectCreate,
     user: CurrentUserDep,
     db: DatabaseDep,
+    request: Request,
+    settings: SettingsDep,
 ) -> Any:
     """Create a new project."""
+    require_permission(user, Permission.PROJECT_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
     project = Project(
         org_id=user.org_id,
         name=payload.name,
@@ -55,7 +62,7 @@ async def create_project(
     )
     async with db.session(TenantContext(org_id=user.org_id)) as session:
         session.add(project)
-        await session.commit()
+        await session.flush()
         await session.refresh(project)
     return ProjectOut(
         id=str(project.id),

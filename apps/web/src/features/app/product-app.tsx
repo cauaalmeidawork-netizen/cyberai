@@ -14,13 +14,13 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { createSessionAuthStore } from "@/features/auth/session";
 import { createApiClient, ApiError } from "@/lib/api/client";
 import { streamConversationMessage } from "@/lib/api/stream";
 import { API_BASE_URL } from "@/lib/config";
 import type {
+  AuthMe,
   BillingLimits,
   BillingUsage,
   ChatMessage,
@@ -34,6 +34,7 @@ import type {
 } from "@/types/api";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type AuthState = "loading" | "authenticated" | "unauthenticated";
 
 interface WorkspaceState {
   projects: Project[];
@@ -54,10 +55,8 @@ const EMPTY_WORKSPACE: WorkspaceState = {
 };
 
 export function ProductApp() {
-  const authStore = useMemo(() => createSessionAuthStore(), []);
-  const [token, setToken] = useState<string | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
-  const [authInput, setAuthInput] = useState("");
+  const [authState, setAuthState] = useState<AuthState>("loading");
+  const [authInfo, setAuthInfo] = useState<AuthMe | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceState>(EMPTY_WORKSPACE);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
@@ -97,21 +96,19 @@ export function ProductApp() {
   }, []);
 
   const invalidateSession = useCallback(() => {
-    authStore.clear();
-    setToken(null);
-    setAuthInput("");
+    setAuthInfo(null);
+    setAuthState("unauthenticated");
     clearTenantState();
-    setNotice("Session expired. Connect again with a valid bearer token.");
-  }, [authStore, clearTenantState]);
+    setNotice("Session expired. Sign in again.");
+  }, [clearTenantState]);
 
   const makeClient = useCallback(
     () =>
       createApiClient({
         baseUrl: API_BASE_URL,
-        getToken: () => token,
         onUnauthorized: invalidateSession,
       }),
-    [invalidateSession, token],
+    [invalidateSession],
   );
 
   const selectedProject = workspace.projects.find((project) => project.id === selectedProjectId);
@@ -170,7 +167,7 @@ export function ProductApp() {
   );
 
   const loadWorkspace = useCallback(async () => {
-    if (!token) {
+    if (authState !== "authenticated") {
       setLoadState("idle");
       return;
     }
@@ -207,46 +204,67 @@ export function ProductApp() {
       setLoadState("error");
       handleApiError(error);
     }
-  }, [handleApiError, loadProjectDetails, makeClient, token]);
+  }, [authState, handleApiError, loadProjectDetails, makeClient]);
 
   useEffect(() => {
     let cancelled = false;
-    window.queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-      setToken(authStore.getToken());
-      setSessionReady(true);
-    });
+    const client = makeClient();
+    void client
+      .get<AuthMe>("/api/v1/auth/me")
+      .then((me) => {
+        if (cancelled) {
+          return;
+        }
+        setAuthInfo(me);
+        setAuthState("authenticated");
+        setNotice(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof ApiError && error.status === 401) {
+          setAuthState("unauthenticated");
+          return;
+        }
+        setAuthState("unauthenticated");
+        handleApiError(error);
+      });
     return () => {
       cancelled = true;
     };
-  }, [authStore]);
+  }, [handleApiError, makeClient]);
 
   useEffect(() => {
-    if (!sessionReady) {
+    if (authState !== "authenticated") {
       return undefined;
     }
     const timeoutId = window.setTimeout(() => {
       void loadWorkspace();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadWorkspace, sessionReady]);
+  }, [authState, loadWorkspace]);
 
-  async function handleConnect(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    authStore.setToken(authInput);
-    const nextToken = authStore.getToken();
-    setToken(nextToken);
-    setNotice(null);
+  function handleLogin() {
+    const loginUrl = new URL("/api/v1/auth/login", API_BASE_URL || window.location.origin);
+    loginUrl.searchParams.set("return_to", "/");
+    window.location.assign(loginUrl.toString());
   }
 
-  function handleLogout() {
-    authStore.clear();
-    setToken(null);
-    setAuthInput("");
-    clearTenantState();
-    setNotice(null);
+  async function handleLogout() {
+    try {
+      const client = makeClient();
+      await client.post<void>("/api/v1/auth/logout", {});
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) {
+        handleApiError(error);
+      }
+    } finally {
+      setAuthInfo(null);
+      setAuthState("unauthenticated");
+      clearTenantState();
+      setNotice(null);
+    }
   }
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
@@ -319,7 +337,7 @@ export function ProductApp() {
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!token || !selectedProjectId || !selectedConversationId || !draft.trim() || isSending) {
+    if (!selectedProjectId || !selectedConversationId || !draft.trim() || isSending) {
       return;
     }
 
@@ -343,7 +361,6 @@ export function ProductApp() {
       let assistantContent = "";
       for await (const event of streamConversationMessage({
         baseUrl: API_BASE_URL,
-        token,
         projectId: selectedProjectId,
         conversationId,
         idempotencyKey,
@@ -428,7 +445,17 @@ export function ProductApp() {
     }
   }
 
-  if (!token) {
+  if (authState === "loading") {
+    return (
+      <main className="min-h-screen bg-background text-foreground">
+        <section className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6">
+          <SkeletonLines />
+        </section>
+      </main>
+    );
+  }
+
+  if (authState === "unauthenticated") {
     return (
       <main className="min-h-screen bg-background text-foreground">
         <section className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6">
@@ -438,28 +465,15 @@ export function ProductApp() {
             </p>
             <h1 className="text-3xl font-semibold">Connect workspace</h1>
             <p className="mt-3 text-sm leading-6 text-muted">
-              Use a bearer token issued outside this frontend. The token is kept in memory and
-              sessionStorage for this browser session only.
+              Sign in through your organization identity provider. The browser only receives an
+              application session cookie.
             </p>
           </div>
           {notice && <InlineNotice message={notice} requestId={lastRequestId} />}
-          <form className="space-y-4" onSubmit={handleConnect}>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">Bearer token</span>
-              <input
-                className="control"
-                type="password"
-                value={authInput}
-                onChange={(event) => setAuthInput(event.target.value)}
-                autoComplete="off"
-                required
-              />
-            </label>
-            <button className="primary-button w-full" type="submit">
-              <ChevronRight size={16} aria-hidden />
-              Connect
-            </button>
-          </form>
+          <button className="primary-button w-full" type="button" onClick={handleLogin}>
+            <ChevronRight size={16} aria-hidden />
+            Sign in with SSO
+          </button>
         </section>
       </main>
     );
@@ -473,7 +487,10 @@ export function ProductApp() {
             <span className="brand-mark">CA</span>
             <div>
               <p className="font-semibold leading-tight">CYBER AI</p>
-              <p className="text-xs text-muted">Tenant workspace</p>
+              <p className="text-xs text-muted">
+                {authInfo?.organizations.find((org) => org.org_id === authInfo.active_org_id)
+                  ?.org_display_name ?? "Tenant workspace"}
+              </p>
             </div>
           </div>
 

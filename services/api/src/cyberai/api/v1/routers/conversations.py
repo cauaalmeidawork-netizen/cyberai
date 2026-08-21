@@ -9,15 +9,15 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cyberai.api.auth import CurrentUserDep
-from cyberai.api.deps import DatabaseDep, MetricsDep, OrchestratorServiceDep
+from cyberai.api.auth import CurrentUserDep, Permission, require_csrf, require_permission
+from cyberai.api.deps import DatabaseDep, MetricsDep, OrchestratorServiceDep, SettingsDep
 from cyberai.api.v1.routers.documents import build_rag_service
 from cyberai.core.context import current_context
 from cyberai.modules.inference import Message as InferenceMessage
@@ -123,8 +123,12 @@ async def create_conversation(
     payload: ConversationCreate,
     user: CurrentUserDep,
     db: DatabaseDep,
+    request: Request,
+    settings: SettingsDep,
 ) -> ConversationOut:
     """Create a new conversation thread within a project."""
+    require_permission(user, Permission.CONVERSATION_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
     async with db.session(TenantContext(org_id=user.org_id)) as session:
         await _project_or_404(session, project_id=project_id, org_id=user.org_id)
         conv = Conversation(
@@ -150,6 +154,7 @@ async def list_conversations(
     db: DatabaseDep,
 ) -> list[ConversationOut]:
     """List all conversations within a project."""
+    require_permission(user, Permission.CONVERSATION_READ)
     async with db.session(TenantContext(org_id=user.org_id)) as session:
         await _project_or_404(session, project_id=project_id, org_id=user.org_id)
         result = await session.execute(
@@ -177,6 +182,7 @@ async def list_messages(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> MessagePageOut:
     """List persisted messages in deterministic order."""
+    require_permission(user, Permission.CONVERSATION_READ)
     async with db.session(TenantContext(org_id=user.org_id)) as session:
         await _conversation_or_404(
             session,
@@ -222,9 +228,13 @@ async def stream_conversation_messages(
     db: DatabaseDep,
     orchestrator: OrchestratorServiceDep,
     metrics: MetricsDep,
+    request: Request,
+    settings: SettingsDep,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> StreamingResponse:
     """Send a message to a conversation and stream the AI response."""
+    require_permission(user, Permission.CONVERSATION_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
     normalized_key = _normalize_idempotency_key(idempotency_key)
     request_hash = _request_hash(payload)
     replay = await _prepare_or_replay_idempotency(

@@ -75,6 +75,21 @@ class LoggingSettings(BaseModel):
 
 class AuthSettings(BaseModel):
     jwt_secret: str = _DEV_AUTH_JWT_SECRET
+    legacy_bearer_enabled: bool = True
+    oidc_enabled: bool = False
+    oidc_auto_provision_enabled: bool = False
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    oidc_redirect_uri: str | None = None
+    oidc_scope: str = "openid email profile"
+    session_cookie_name: str = "cyberai_session"
+    csrf_header_name: str = "X-CSRF-Token"
+    session_ttl_seconds: Annotated[int, Field(gt=0)] = 28_800
+    session_secure_cookie: bool | None = None
+    session_samesite: Literal["lax", "strict", "none"] = "lax"
+    session_secret: SecretStr | None = None
+    csrf_secret: SecretStr | None = None
 
 
 class DatabaseSettings(BaseModel):
@@ -268,6 +283,24 @@ class Settings(BaseSettings):
             problems.append("app.expose_docs must be false outside local/ci")
         if self.auth.jwt_secret == _DEV_AUTH_JWT_SECRET:
             problems.append("auth.jwt_secret still contains a development secret")
+        if self.auth.legacy_bearer_enabled:
+            problems.append("legacy bearer authentication must be disabled outside local/ci")
+        if not self.auth.oidc_enabled:
+            problems.append("auth.oidc_enabled must be true outside local/ci")
+        if self.auth.oidc_auto_provision_enabled:
+            problems.append("auth.oidc_auto_provision_enabled must be false outside local/ci")
+        if not self.auth.oidc_issuer:
+            problems.append("auth.oidc_issuer must be configured outside local/ci")
+        if not self.auth.oidc_client_id:
+            problems.append("auth.oidc_client_id must be configured outside local/ci")
+        if self.auth.oidc_client_secret is None:
+            problems.append("auth.oidc_client_secret must be configured outside local/ci")
+        if self.auth.session_secret is None:
+            problems.append("auth.session_secret must be configured outside local/ci")
+        if self.auth.csrf_secret is None:
+            problems.append("auth.csrf_secret must be configured outside local/ci")
+        if self.auth.session_secure_cookie is False:
+            problems.append("auth.session_secure_cookie must be true outside local/ci")
         configured_models = [self.models.default_model, *self.models.fallback_models]
         if any(model.startswith("mock-") for model in configured_models):
             problems.append("mock models are not allowed outside local/ci")
