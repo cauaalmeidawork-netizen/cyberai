@@ -9,6 +9,17 @@ const API_PROXY_TARGET =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   "http://localhost:8000";
 
+function readSetCookies(headers: Headers): string[] {
+  const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
+  const cookies = withGetSetCookie.getSetCookie?.() ?? [];
+  if (cookies.length > 0) return cookies;
+
+  const combined = headers.get("set-cookie");
+  if (!combined) return [];
+
+  return combined.split(/,(?=\s*[^;,]+=)/g).map((value) => value.trim());
+}
+
 async function proxy(request: Request, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
   const incomingUrl = new URL(request.url);
@@ -29,20 +40,23 @@ async function proxy(request: Request, context: RouteContext): Promise<Response>
     cache: "no-store",
   });
 
-  const responseHeaders = new Headers(upstream.headers);
-  responseHeaders.delete("content-encoding");
-  responseHeaders.delete("content-length");
-  responseHeaders.delete("transfer-encoding");
-
-  const upstreamHeaders = upstream.headers as Headers & {
-    getSetCookie?: () => string[];
-  };
-  const setCookies = upstreamHeaders.getSetCookie?.() ?? [];
-  if (setCookies.length > 0) {
-    responseHeaders.delete("set-cookie");
-    for (const cookie of setCookies) {
-      responseHeaders.append("set-cookie", cookie);
+  const responseHeaders = new Headers();
+  for (const [key, value] of upstream.headers.entries()) {
+    const lower = key.toLowerCase();
+    if (
+      lower === "set-cookie" ||
+      lower === "content-encoding" ||
+      lower === "content-length" ||
+      lower === "transfer-encoding" ||
+      lower === "connection"
+    ) {
+      continue;
     }
+    responseHeaders.append(key, value);
+  }
+
+  for (const cookie of readSetCookies(upstream.headers)) {
+    responseHeaders.append("set-cookie", cookie);
   }
 
   return new Response(upstream.body, {
