@@ -24,6 +24,14 @@ async function ensureStarterWorkspace() {
   });
 }
 
+function loginUrl(): string {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  const localApi = apiBase.includes("localhost") || apiBase.includes("127.0.0.1");
+  return localApi
+    ? "/api/v1/auth/dev-login?return_to=%2F"
+    : "/api/v1/auth/login?return_to=%2F";
+}
+
 export function AuthEntry() {
   const [ready, setReady] = useState(false);
 
@@ -41,7 +49,7 @@ export function AuthEntry() {
         const returnedFromAuth = currentUrl.searchParams.get("_auth") === "1";
 
         if (response.status === 401 && !returnedFromAuth) {
-          window.location.replace("/api/v1/auth/login?return_to=%2F");
+          window.location.replace(loginUrl());
           return;
         }
 
