@@ -170,7 +170,10 @@ async def callback(
         membership_id=membership.id,
         ttl=timedelta(seconds=settings.auth.session_ttl_seconds),
     )
-    response = RedirectResponse(login_state.return_to or "/", status_code=302)
+    redirect_target = login_state.return_to or "/"
+    if redirect_target.startswith("/") and settings.app.cors_origins:
+        redirect_target = f"{str(settings.app.cors_origins[0]).rstrip('/')}{redirect_target}"
+    response = RedirectResponse(redirect_target, status_code=302)
     response.set_cookie(value=created.token, **session_cookie_options(settings, created.expires_at))
     _set_csrf_cookie(response, created.csrf_token, settings)
     return response
