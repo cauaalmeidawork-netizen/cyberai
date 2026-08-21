@@ -12,6 +12,25 @@ function Write-Step([string] $Message) {
     Write-Host "[cyberai-local] $Message"
 }
 
+function Stop-ProcessTree([int] $ProcessId, [string] $Name) {
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) {
+        return
+    }
+
+    Write-Step "Stopping $Name process tree rooted at PID $ProcessId."
+    $taskkill = Get-Command taskkill.exe -ErrorAction SilentlyContinue
+    if ($taskkill) {
+        & $taskkill.Source /PID $ProcessId /T /F | Out-Null
+        if ($LASTEXITCODE -ne 0 -and (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)) {
+            throw "Failed to stop $Name process tree rooted at PID $ProcessId."
+        }
+        return
+    }
+
+    Stop-Process -Id $ProcessId -Force
+}
+
 foreach ($entry in $PidFiles) {
     if (-not (Test-Path $entry.Path)) {
         continue
@@ -22,11 +41,7 @@ foreach ($entry in $PidFiles) {
         continue
     }
     $pidValue = [int] $rawPid
-    $process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
-    if ($process) {
-        Write-Step "Stopping $($entry.Name) PID $pidValue."
-        Stop-Process -Id $pidValue -Force
-    }
+    Stop-ProcessTree -ProcessId $pidValue -Name $entry.Name
     Remove-Item -LiteralPath $entry.Path -Force
 }
 
