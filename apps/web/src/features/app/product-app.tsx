@@ -1,0 +1,726 @@
+"use client";
+
+import {
+  AlertTriangle,
+  Bot,
+  ChevronRight,
+  FileText,
+  Folder,
+  LogOut,
+  MessageSquare,
+  Plus,
+  Send,
+  Square,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { createSessionAuthStore } from "@/features/auth/session";
+import { createApiClient, ApiError } from "@/lib/api/client";
+import { streamConversationMessage } from "@/lib/api/stream";
+import { API_BASE_URL } from "@/lib/config";
+import type {
+  BillingLimits,
+  BillingUsage,
+  ChatMessage,
+  Conversation,
+  DocumentRecord,
+  ModelInfo,
+  ModelListResponse,
+  Project,
+  Quota,
+} from "@/types/api";
+
+type LoadState = "idle" | "loading" | "ready" | "error";
+
+interface WorkspaceState {
+  projects: Project[];
+  conversations: Conversation[];
+  documents: DocumentRecord[];
+  models: ModelInfo[];
+  limits: BillingLimits | null;
+  usage: BillingUsage | null;
+}
+
+const EMPTY_WORKSPACE: WorkspaceState = {
+  projects: [],
+  conversations: [],
+  documents: [],
+  models: [],
+  limits: null,
+  usage: null,
+};
+
+export function ProductApp() {
+  const authStore = useMemo(() => createSessionAuthStore(), []);
+  const [token, setToken] = useState<string | null>(() => authStore.getToken());
+  const [authInput, setAuthInput] = useState("");
+  const [workspace, setWorkspace] = useState<WorkspaceState>(EMPTY_WORKSPACE);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [messagesByConversation, setMessagesByConversation] = useState<
+    Record<string, ChatMessage[]>
+  >({});
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [lastRequestId, setLastRequestId] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectDescription, setNewProjectDescription] = useState("");
+  const [newConversationTitle, setNewConversationTitle] = useState("");
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentContent, setDocumentContent] = useState("");
+  const streamAbortRef = useRef<AbortController | null>(null);
+
+  const clearTenantState = useCallback(() => {
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    setWorkspace(EMPTY_WORKSPACE);
+    setSelectedProjectId(null);
+    setSelectedConversationId(null);
+    setMessagesByConversation({});
+    setSelectedModel("");
+    setDraft("");
+    setNewProjectName("");
+    setNewProjectDescription("");
+    setNewConversationTitle("");
+    setDocumentTitle("");
+    setDocumentContent("");
+    setIsSending(false);
+  }, []);
+
+  const invalidateSession = useCallback(() => {
+    authStore.clear();
+    setToken(null);
+    setAuthInput("");
+    clearTenantState();
+    setNotice("Session expired. Connect again with a valid bearer token.");
+  }, [authStore, clearTenantState]);
+
+  const makeClient = useCallback(
+    () =>
+      createApiClient({
+        baseUrl: API_BASE_URL,
+        getToken: () => token,
+        onUnauthorized: invalidateSession,
+      }),
+    [invalidateSession, token],
+  );
+
+  const selectedProject = workspace.projects.find((project) => project.id === selectedProjectId);
+  const selectedConversation = workspace.conversations.find(
+    (conversation) => conversation.id === selectedConversationId,
+  );
+  const selectedMessages = selectedConversationId
+    ? messagesByConversation[selectedConversationId] ?? []
+    : [];
+
+  const handleApiError = useCallback((error: unknown) => {
+    if (error instanceof ApiError) {
+      setLastRequestId(error.requestId);
+      setNotice(messageForApiError(error));
+      return;
+    }
+    if (error instanceof DOMException && error.name === "AbortError") {
+      setNotice("Generation stopped.");
+      return;
+    }
+    setNotice("Network error. Check the API connection and try again.");
+  }, []);
+
+  const loadProjectDetails = useCallback(
+    async (projectId: string) => {
+      const client = makeClient();
+      const [conversations, documents] = await Promise.all([
+        client.get<Conversation[]>(`/api/v1/projects/${projectId}/conversations`),
+        client.get<DocumentRecord[]>(`/api/v1/projects/${projectId}/documents`),
+      ]);
+      setWorkspace((current) => ({ ...current, conversations, documents }));
+      setSelectedConversationId((current) => current ?? conversations[0]?.id ?? null);
+    },
+    [makeClient],
+  );
+
+  const loadWorkspace = useCallback(async () => {
+    if (!token) {
+      setLoadState("idle");
+      return;
+    }
+    setLoadState("loading");
+    setNotice(null);
+    try {
+      const client = makeClient();
+      const [projects, modelsResponse, limits, usage] = await Promise.all([
+        client.get<Project[]>("/api/v1/projects"),
+        client.get<ModelListResponse>("/api/v1/models"),
+        client.get<BillingLimits>("/api/v1/billing/limits"),
+        client.get<BillingUsage>("/api/v1/billing/usage"),
+      ]);
+      const projectId = selectedProjectId ?? projects[0]?.id ?? null;
+      setWorkspace((current) => ({
+        ...current,
+        projects,
+        models: modelsResponse.data,
+        limits,
+        usage,
+      }));
+      setSelectedModel((current) => current || modelsResponse.data[0]?.key || "");
+      setSelectedProjectId(projectId);
+      if (projectId) {
+        await loadProjectDetails(projectId);
+      } else {
+        setWorkspace((current) => ({ ...current, conversations: [], documents: [] }));
+      }
+      setLoadState("ready");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        return;
+      }
+      setLoadState("error");
+      handleApiError(error);
+    }
+  }, [handleApiError, loadProjectDetails, makeClient, selectedProjectId, token]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadWorkspace();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadWorkspace]);
+
+  async function handleConnect(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    authStore.setToken(authInput);
+    const nextToken = authStore.getToken();
+    setToken(nextToken);
+    setNotice(null);
+  }
+
+  function handleLogout() {
+    authStore.clear();
+    setToken(null);
+    setAuthInput("");
+    clearTenantState();
+    setNotice(null);
+  }
+
+  async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newProjectName.trim()) {
+      return;
+    }
+    try {
+      const client = makeClient();
+      const project = await client.post<Project>("/api/v1/projects", {
+        name: newProjectName.trim(),
+        description: newProjectDescription.trim() || null,
+      });
+      setWorkspace((current) => ({ ...current, projects: [project, ...current.projects] }));
+      setSelectedProjectId(project.id);
+      setSelectedConversationId(null);
+      setNewProjectName("");
+      setNewProjectDescription("");
+      await loadProjectDetails(project.id);
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
+  async function handleSelectProject(projectId: string) {
+    setSelectedProjectId(projectId);
+    setSelectedConversationId(null);
+    setWorkspace((current) => ({ ...current, conversations: [], documents: [] }));
+    try {
+      await loadProjectDetails(projectId);
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
+  async function handleCreateConversation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProjectId || !newConversationTitle.trim()) {
+      return;
+    }
+    try {
+      const client = makeClient();
+      const conversation = await client.post<Conversation>(
+        `/api/v1/projects/${selectedProjectId}/conversations`,
+        { title: newConversationTitle.trim() },
+      );
+      setWorkspace((current) => ({
+        ...current,
+        conversations: [conversation, ...current.conversations],
+      }));
+      setSelectedConversationId(conversation.id);
+      setNewConversationTitle("");
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
+  async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !selectedProjectId || !selectedConversationId || !draft.trim() || isSending) {
+      return;
+    }
+
+    const userMessage: ChatMessage = { role: "user", content: draft.trim() };
+    const conversationId = selectedConversationId;
+    const existingMessages = messagesByConversation[conversationId] ?? [];
+    const nextMessages = [...existingMessages, userMessage];
+    setMessagesByConversation((current) => ({
+      ...current,
+      [conversationId]: nextMessages,
+    }));
+    setDraft("");
+    setIsSending(true);
+    setNotice(null);
+
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+
+    try {
+      let assistantContent = "";
+      for await (const event of streamConversationMessage({
+        baseUrl: API_BASE_URL,
+        token,
+        projectId: selectedProjectId,
+        conversationId,
+        signal: controller.signal,
+        payload: {
+          messages: nextMessages,
+          model: selectedModel || null,
+          max_tokens: 1024,
+          temperature: 0.2,
+        },
+      })) {
+        if (event.event === "delta") {
+          assistantContent += event.text;
+          setMessagesByConversation((current) => ({
+            ...current,
+            [conversationId]: [
+              ...nextMessages,
+              { role: "assistant", content: assistantContent },
+            ],
+          }));
+        }
+      }
+    } catch (error) {
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: existingMessages,
+      }));
+      handleApiError(error);
+    } finally {
+      streamAbortRef.current = null;
+      setIsSending(false);
+    }
+  }
+
+  function handleStopGeneration() {
+    streamAbortRef.current?.abort();
+  }
+
+  async function handleCreateDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProjectId || !documentTitle.trim() || !documentContent.trim()) {
+      return;
+    }
+    try {
+      const client = makeClient();
+      const document = await client.post<DocumentRecord>(
+        `/api/v1/projects/${selectedProjectId}/documents`,
+        {
+          title: documentTitle.trim(),
+          content: documentContent.trim(),
+          source_type: "text",
+        },
+      );
+      setWorkspace((current) => ({
+        ...current,
+        documents: [document, ...current.documents],
+      }));
+      setDocumentTitle("");
+      setDocumentContent("");
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
+  async function handleDeleteDocument(documentId: string) {
+    if (!selectedProjectId) {
+      return;
+    }
+    try {
+      const client = makeClient();
+      await client.delete<void>(`/api/v1/projects/${selectedProjectId}/documents/${documentId}`);
+      setWorkspace((current) => ({
+        ...current,
+        documents: current.documents.filter((document) => document.id !== documentId),
+      }));
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
+  if (!token) {
+    return (
+      <main className="min-h-screen bg-background text-foreground">
+        <section className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6">
+          <div className="mb-8">
+            <p className="mb-3 font-mono text-xs uppercase tracking-[0.24em] text-accent">
+              CYBER AI
+            </p>
+            <h1 className="text-3xl font-semibold">Connect workspace</h1>
+            <p className="mt-3 text-sm leading-6 text-muted">
+              Use a bearer token issued outside this frontend. The token is kept in memory and
+              sessionStorage for this browser session only.
+            </p>
+          </div>
+          {notice && <InlineNotice message={notice} requestId={lastRequestId} />}
+          <form className="space-y-4" onSubmit={handleConnect}>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium">Bearer token</span>
+              <input
+                className="control"
+                type="password"
+                value={authInput}
+                onChange={(event) => setAuthInput(event.target.value)}
+                autoComplete="off"
+                required
+              />
+            </label>
+            <button className="primary-button w-full" type="submit">
+              <ChevronRight size={16} aria-hidden />
+              Connect
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="product-shell">
+        <aside className="sidebar" aria-label="Workspace navigation">
+          <div className="brand-lockup">
+            <span className="brand-mark">CA</span>
+            <div>
+              <p className="font-semibold leading-tight">CYBER AI</p>
+              <p className="text-xs text-muted">Tenant workspace</p>
+            </div>
+          </div>
+
+          <section className="nav-section">
+            <SectionHeader icon={<Folder size={15} />} label="Projects" />
+            <form className="stack-sm" onSubmit={handleCreateProject}>
+              <input
+                className="control compact"
+                placeholder="Project name"
+                value={newProjectName}
+                onChange={(event) => setNewProjectName(event.target.value)}
+              />
+              <input
+                className="control compact"
+                placeholder="Description"
+                value={newProjectDescription}
+                onChange={(event) => setNewProjectDescription(event.target.value)}
+              />
+              <button className="secondary-button w-full" type="submit">
+                <Plus size={14} aria-hidden />
+                Create project
+              </button>
+            </form>
+            <div className="list-stack">
+              {workspace.projects.length === 0 && loadState !== "loading" ? (
+                <p className="empty-text">Create a project to start a workspace.</p>
+              ) : null}
+              {workspace.projects.map((project) => (
+                <button
+                  className={`list-row ${project.id === selectedProjectId ? "active" : ""}`}
+                  key={project.id}
+                  type="button"
+                  onClick={() => void handleSelectProject(project.id)}
+                >
+                  <span className="truncate text-left">{project.name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="nav-section">
+            <SectionHeader icon={<MessageSquare size={15} />} label="Conversations" />
+            <form className="stack-sm" onSubmit={handleCreateConversation}>
+              <input
+                className="control compact"
+                placeholder="Conversation title"
+                value={newConversationTitle}
+                onChange={(event) => setNewConversationTitle(event.target.value)}
+                disabled={!selectedProjectId}
+              />
+              <button className="secondary-button w-full" type="submit" disabled={!selectedProjectId}>
+                <Plus size={14} aria-hidden />
+                New conversation
+              </button>
+            </form>
+            <div className="list-stack">
+              {selectedProjectId && workspace.conversations.length === 0 ? (
+                <p className="empty-text">No conversations in this project.</p>
+              ) : null}
+              {workspace.conversations.map((conversation) => (
+                <button
+                  className={`list-row ${
+                    conversation.id === selectedConversationId ? "active" : ""
+                  }`}
+                  key={conversation.id}
+                  type="button"
+                  onClick={() => setSelectedConversationId(conversation.id)}
+                >
+                  <span className="truncate text-left">{conversation.title}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <button className="ghost-button mt-auto" type="button" onClick={handleLogout}>
+            <LogOut size={16} aria-hidden />
+            Logout
+          </button>
+        </aside>
+
+        <section className="chat-surface" aria-label="Chat">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">{selectedProject ? selectedProject.name : "No project selected"}</p>
+              <h1 className="text-xl font-semibold">
+                {selectedConversation ? selectedConversation.title : "Conversation"}
+              </h1>
+            </div>
+            <label className="model-select">
+              <span>Model</span>
+              <select
+                className="control compact"
+                value={selectedModel}
+                onChange={(event) => setSelectedModel(event.target.value)}
+              >
+                <option value="">Default route</option>
+                {workspace.models.map((model) => (
+                  <option key={model.key} value={model.key}>
+                    {model.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </header>
+
+          {notice && <InlineNotice message={notice} requestId={lastRequestId} />}
+          {loadState === "loading" ? <SkeletonLines /> : null}
+
+          <div className="message-stream" aria-live="polite">
+            {!selectedConversation ? (
+              <div className="empty-panel">
+                <Bot size={22} aria-hidden />
+                <p>Select or create a conversation.</p>
+              </div>
+            ) : selectedMessages.length === 0 ? (
+              <div className="empty-panel">
+                <Bot size={22} aria-hidden />
+                <p>Ask a defensive security question to start this thread.</p>
+              </div>
+            ) : (
+              selectedMessages.map((message, index) => (
+                <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
+                  <span className="message-role">{message.role}</span>
+                  <p>{message.content}</p>
+                </article>
+              ))
+            )}
+          </div>
+
+          <form className="composer" onSubmit={handleSendMessage}>
+            <textarea
+              className="composer-input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={
+                selectedConversation
+                  ? "Ask about detection, triage, code review, or RAG context"
+                  : "Create a conversation first"
+              }
+              disabled={!selectedConversation || isSending}
+              rows={3}
+            />
+            <div className="composer-actions">
+              {isSending ? (
+                <button className="secondary-button" type="button" onClick={handleStopGeneration}>
+                  <Square size={14} aria-hidden />
+                  Stop
+                </button>
+              ) : null}
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={!selectedConversation || !draft.trim() || isSending}
+              >
+                <Send size={15} aria-hidden />
+                Send
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside className="context-panel" aria-label="Documents and usage">
+          <section className="panel-section">
+            <SectionHeader icon={<FileText size={15} />} label="Documents" />
+            <form className="stack-sm" onSubmit={handleCreateDocument}>
+              <input
+                className="control compact"
+                placeholder="Document title"
+                value={documentTitle}
+                onChange={(event) => setDocumentTitle(event.target.value)}
+                disabled={!selectedProjectId}
+              />
+              <textarea
+                className="control text-area"
+                placeholder="Controlled document text"
+                value={documentContent}
+                onChange={(event) => setDocumentContent(event.target.value)}
+                disabled={!selectedProjectId}
+              />
+              <button className="secondary-button w-full" type="submit" disabled={!selectedProjectId}>
+                <Upload size={14} aria-hidden />
+                Ingest document
+              </button>
+            </form>
+            <div className="list-stack">
+              {workspace.documents.length === 0 ? (
+                <p className="empty-text">No documents indexed for this project.</p>
+              ) : null}
+              {workspace.documents.map((document) => (
+                <div className="document-row" key={document.id}>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{document.title}</p>
+                    <p className="text-xs text-muted">{document.status}</p>
+                  </div>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={`Delete ${document.title}`}
+                    onClick={() => void handleDeleteDocument(document.id)}
+                  >
+                    <Trash2 size={15} aria-hidden />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-section">
+            <SectionHeader icon={<AlertTriangle size={15} />} label="Usage" />
+            <p className="mb-3 text-sm font-medium">
+              Plan {workspace.limits?.plan ?? workspace.usage?.plan ?? "unknown"}
+            </p>
+            <div className="quota-stack">
+              {(workspace.usage?.usage ?? workspace.limits?.quotas ?? []).map((quota) => (
+                <QuotaMeter key={quota.resource} quota={quota} />
+              ))}
+              {workspace.limits ? (
+                <>
+                  <div className="usage-line">
+                    <span>RAG</span>
+                    <strong>{workspace.limits.rag_allowed ? "Allowed" : "Blocked"}</strong>
+                  </div>
+                  <div className="usage-line">
+                    <span>Documents</span>
+                    <strong>{workspace.limits.document_limit}</strong>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  );
+}
+
+function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="section-header">
+      {icon}
+      <h2>{label}</h2>
+    </div>
+  );
+}
+
+function InlineNotice({ message, requestId }: { message: string; requestId: string | null }) {
+  return (
+    <div className="notice" role="status">
+      <AlertTriangle size={16} aria-hidden />
+      <span>{message}</span>
+      {requestId ? <code>{requestId}</code> : null}
+    </div>
+  );
+}
+
+function SkeletonLines() {
+  return (
+    <div className="skeleton-stack" aria-label="Loading workspace">
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+function QuotaMeter({ quota }: { quota: Quota }) {
+  const denominator = quota.limit > 0 ? quota.limit : 1;
+  const percentage = Math.min(100, Math.round(((quota.used + quota.reserved) / denominator) * 100));
+
+  return (
+    <div className="quota-meter">
+      <div className="usage-line">
+        <span>{quota.resource.replaceAll("_", " ")}</span>
+        <strong>{quota.remaining} left</strong>
+      </div>
+      <div className="meter-track" aria-hidden>
+        <span style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function messageForApiError(error: ApiError): string {
+  if (error.status === 400 || error.status === 422) {
+    return "The request is invalid. Review the highlighted input and try again.";
+  }
+  if (error.status === 403) {
+    if (error.code === "policy_denied" || error.code === "unsafe_output") {
+      return "Blocked by security policy.";
+    }
+    return "Your current access does not allow this action.";
+  }
+  if (error.status === 404) {
+    return "The selected resource was not found. Refresh the workspace.";
+  }
+  if (error.status === 409) {
+    return "This action conflicts with the current workspace state.";
+  }
+  if (error.status === 413) {
+    return "The request is too large.";
+  }
+  if (error.status === 429) {
+    return error.code === "quota_exceeded"
+      ? "Quota exceeded for this billing period."
+      : "Too many requests. Try again later.";
+  }
+  if (error.status === 503 || error.status === 504) {
+    return "The model provider or a dependency is unavailable.";
+  }
+  return "Request failed. Try again.";
+}
