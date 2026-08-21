@@ -1,5 +1,5 @@
-import { ProductApp } from "@/features/app/product-app";
+import { AuthEntry } from "@/features/app/auth-entry";
 
 export default function Home() {
-  return <ProductApp />;
+  return <AuthEntry />;
 }
