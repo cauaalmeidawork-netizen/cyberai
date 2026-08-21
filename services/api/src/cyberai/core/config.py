@@ -236,7 +236,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CYBERAI_",
         env_nested_delimiter="__",
-        env_file=(".env",),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -344,7 +343,7 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return the process-wide settings, validated once."""
     try:
-        return Settings()
+        return Settings(_env_file=".env")
     except Exception as exc:
         raise ConfigurationError(f"Invalid configuration: {exc}") from exc
 

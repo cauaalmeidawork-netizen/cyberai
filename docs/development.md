@@ -2,13 +2,29 @@
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and adjust values.
-2. Make sure Docker Desktop is running (or PostgreSQL + Redis locally).
-3. Start the stack:
+1. Make sure Docker Desktop is running.
+2. Make sure Ollama is running and `qwen2.5:3b` is installed.
+3. Start the local stack:
 
 ```bash
-docker compose -f infra/compose/docker-compose.yml --profile migrate run --rm migrate
-docker compose -f infra/compose/docker-compose.yml up --build
+powershell -ExecutionPolicy Bypass -File scripts/dev-local.ps1
+```
+
+The script creates ignored local env files when missing:
+
+- `services/api/.env`
+- `apps/web/.env.local`
+
+Local traffic is intentionally same-origin from the browser:
+
+```text
+Browser -> Next.js localhost:3000 -> /api proxy -> FastAPI localhost:8001 -> Ollama localhost:11434
+```
+
+Stop only the CyberAI local processes and containers:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/stop-local.ps1
 ```
 
 ## Local backend
@@ -17,7 +33,7 @@ docker compose -f infra/compose/docker-compose.yml up --build
 cd services/api
 uv sync --all-groups
 uv run alembic upgrade head
-uv run uvicorn cyberai.main:create_app --factory --reload
+uv run uvicorn cyberai.main:create_app --factory --host 127.0.0.1 --port 8001 --reload
 ```
 
 ## Local frontend
@@ -25,6 +41,7 @@ uv run uvicorn cyberai.main:create_app --factory --reload
 ```bash
 cd apps/web
 npm install
+copy .env.example .env.local
 npm run dev
 ```
 

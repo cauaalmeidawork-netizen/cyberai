@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
-from httpx import AsyncClient
+from asgi_lifespan import LifespanManager
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from cyberai.core.config import load_settings
+from cyberai.main import create_app
 
 
 @pytest.mark.asyncio
@@ -46,8 +53,32 @@ async def test_list_models(app_client: AsyncClient) -> None:
     response = await app_client.get("/api/v1/models")
     assert response.status_code == 200
     body = response.json()
+    assert body["default_model"] == "mock-analyst-1"
     keys = {model["key"] for model in body["data"]}
     assert "mock-analyst-1" in keys
+
+
+@pytest.mark.asyncio
+async def test_list_models_returns_configured_openai_compatible_default() -> None:
+    settings = load_settings(
+        openai_compatible={
+            "enabled": True,
+            "api_key": "ollama",
+            "base_url": "http://localhost:11434/v1",
+            "model": "qwen2.5:3b",
+            "display_name": "Qwen 2.5 3B Local",
+        },
+        models={"default_model": "openai-compatible-chat", "fallback_models": []},
+    )
+    app = create_app(settings)
+    async with _client(app) as client:
+        response = await client.get("/api/v1/models")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["default_model"] == "openai-compatible-chat"
+    assert body["data"][0]["key"] == "openai-compatible-chat"
+    assert body["data"][0]["display_name"] == "Qwen 2.5 3B Local"
 
 
 @pytest.mark.asyncio
@@ -92,3 +123,15 @@ async def test_cors_preflight(app_client: AsyncClient) -> None:
     assert response.status_code == 200
     assert "access-control-allow-origin" in response.headers
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+@asynccontextmanager
+async def _client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    async with (
+        LifespanManager(app) as manager,
+        AsyncClient(
+            transport=ASGITransport(app=manager.app),
+            base_url="http://testserver",
+        ) as client,
+    ):
+        yield client

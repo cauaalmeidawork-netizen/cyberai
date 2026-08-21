@@ -10,26 +10,39 @@ async function ensureStarterWorkspace() {
   const client = createApiClient({ baseUrl: "" });
   const projects = await client.get<Project[]>("/api/v1/projects");
 
-  if (projects.length > 0) {
+  const project =
+    projects[0] ??
+    (await client.post<Project>("/api/v1/projects", {
+      name: "General",
+      description: "Default workspace",
+    }));
+
+  const conversations = await client.get<Conversation[]>(
+    `/api/v1/projects/${project.id}/conversations`,
+  );
+  if (conversations.length > 0) {
     return;
   }
-
-  const project = await client.post<Project>("/api/v1/projects", {
-    name: "General",
-    description: "Default workspace",
-  });
 
   await client.post<Conversation>(`/api/v1/projects/${project.id}/conversations`, {
     title: "New conversation",
   });
 }
 
-function loginUrl(): string {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-  const localApi = apiBase.includes("localhost") || apiBase.includes("127.0.0.1");
+export function loginUrlForEnvironment(
+  apiBase: string,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): string {
+  const localApi =
+    nodeEnv === "development" &&
+    (!apiBase || apiBase.includes("localhost") || apiBase.includes("127.0.0.1"));
   return localApi
     ? "/api/v1/auth/dev-login?return_to=%2F"
     : "/api/v1/auth/login?return_to=%2F";
+}
+
+function loginUrl(): string {
+  return loginUrlForEnvironment(process.env.NEXT_PUBLIC_API_BASE_URL ?? "");
 }
 
 export function AuthEntry() {

@@ -190,7 +190,12 @@ export function ProductApp() {
         limits,
         usage,
       }));
-      setSelectedModel((current) => current || modelsResponse.data[0]?.key || "");
+      setSelectedModel((current) => {
+        if (current && modelsResponse.data.some((model) => model.key === current)) {
+          return current;
+        }
+        return modelsResponse.default_model;
+      });
       setSelectedProjectId(projectId);
       if (projectId) {
         await loadProjectDetails(projectId);
@@ -510,7 +515,7 @@ export function ProductApp() {
               <p className="font-semibold leading-tight">CYBER AI</p>
               <p className="text-xs text-muted">
                 {authInfo?.organizations.find((org) => org.org_id === authInfo.active_org_id)
-                  ?.org_display_name ?? "Tenant workspace"}
+                  ?.org_display_name ?? "Workspace"}
               </p>
             </div>
           </div>
@@ -595,7 +600,7 @@ export function ProductApp() {
         <section className="chat-surface" aria-label="Chat">
           <header className="topbar">
             <div>
-              <p className="eyebrow">{selectedProject ? selectedProject.name : "No project selected"}</p>
+              <p className="eyebrow">{selectedProject ? selectedProject.name : "Workspace"}</p>
               <h1 className="text-xl font-semibold">
                 {selectedConversation ? selectedConversation.title : "Conversation"}
               </h1>
@@ -607,7 +612,9 @@ export function ProductApp() {
                 value={selectedModel}
                 onChange={(event) => setSelectedModel(event.target.value)}
               >
-                <option value="">Default route</option>
+                <option value="" disabled>
+                  Loading models
+                </option>
                 {workspace.models.map((model) => (
                   <option key={model.key} value={model.key}>
                     {model.display_name}
@@ -734,13 +741,13 @@ export function ProductApp() {
           <section className="panel-section">
             <SectionHeader icon={<AlertTriangle size={15} />} label="Usage" />
             <p className="mb-3 text-sm font-medium">
-              Plan {workspace.limits?.plan ?? workspace.usage?.plan ?? "unknown"}
+              Plan {workspace.limits?.plan ?? workspace.usage?.plan ?? "loading"}
             </p>
             <p className="mb-3 text-xs text-muted">
               Status{" "}
               {workspace.limits?.subscription_status ??
                 workspace.usage?.subscription_status ??
-                "unknown"}
+                "loading"}
             </p>
             <div className="quota-stack">
               {(workspace.usage?.usage ?? workspace.limits?.quotas ?? []).map((quota) => (

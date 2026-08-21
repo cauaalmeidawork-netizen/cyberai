@@ -26,13 +26,15 @@ class ModelInfo(BaseModel):
 
 class ModelListResponse(BaseModel):
     data: list[ModelInfo]
+    default_model: str
 
 
 @router.get("/models", response_model=ModelListResponse, summary="List available models")
 async def list_models(catalog: ModelCatalogDep, settings: SettingsDep) -> ModelListResponse:
-    models = catalog.list_all()
+    models = list(catalog.list_all())
     models.sort(key=lambda model: model.key != settings.models.default_model)
     return ModelListResponse(
+        default_model=settings.models.default_model,
         data=[
             ModelInfo(
                 key=model.key,
@@ -43,5 +45,5 @@ async def list_models(catalog: ModelCatalogDep, settings: SettingsDep) -> ModelL
                 tasks=sorted(task.value for task in model.tasks),
             )
             for model in models
-        ]
+        ],
     )

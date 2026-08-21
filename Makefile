@@ -1,4 +1,4 @@
-.PHONY: help api web up down test lint typecheck migrate
+.PHONY: help api web up down test lint typecheck migrate dev-local stop-local
 
 help:
 	@echo "CYBER AI - available commands:"
@@ -10,9 +10,11 @@ help:
 	@echo "  make lint       - run backend linting"
 	@echo "  make typecheck  - run backend type checks"
 	@echo "  make migrate    - run Alembic migrations"
+	@echo "  make dev-local  - start the local Ollama development stack"
+	@echo "  make stop-local - stop the local Ollama development stack"
 
 api:
-	cd services/api && uv run uvicorn cyberai.main:create_app --factory --reload
+	cd services/api && uv run uvicorn cyberai.main:create_app --factory --host 127.0.0.1 --port 8001 --reload
 
 web:
 	cd apps/web && npm run dev
@@ -34,3 +36,9 @@ typecheck:
 
 migrate:
 	cd services/api && uv run alembic upgrade head
+
+dev-local:
+	powershell -ExecutionPolicy Bypass -File scripts/dev-local.ps1
+
+stop-local:
+	powershell -ExecutionPolicy Bypass -File scripts/stop-local.ps1

@@ -52,8 +52,16 @@ services:
       CYBERAI_LOGGING__LEVEL: DEBUG
       CYBERAI_APP__TRUSTED_HOSTS: '["localhost","127.0.0.1","cyberai-api"]'
       CYBERAI_APP__EXPOSE_DOCS: "true"
+      CYBERAI_OPENAI_COMPATIBLE__ENABLED: "true"
+      CYBERAI_OPENAI_COMPATIBLE__API_KEY: ollama
+      CYBERAI_OPENAI_COMPATIBLE__BASE_URL: http://host.docker.internal:11434/v1
+      CYBERAI_OPENAI_COMPATIBLE__MODEL: qwen2.5:3b
+      CYBERAI_OPENAI_COMPATIBLE__MODEL_KEY: openai-compatible-chat
+      CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME: Qwen 2.5 3B Local
+      CYBERAI_MODELS__DEFAULT_MODEL: openai-compatible-chat
+      CYBERAI_MODELS__FALLBACK_MODELS: "[]"
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8001}:8000"
     networks:
       - cyberai
     read_only: true
@@ -86,14 +94,15 @@ services:
       context: ../../apps/web
       dockerfile: ../../infra/docker/Dockerfile.web
       args:
-        NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
+        NEXT_PUBLIC_API_BASE_URL: ""
     container_name: cyberai-web
     depends_on:
       - api
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_PORT:-8000}
+      API_PROXY_TARGET: http://api:8000
+      NEXT_PUBLIC_API_BASE_URL: ""
     ports:
-      - "${WEB_PORT:-3000}:3000"
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
     networks:
       - cyberai
     read_only: true

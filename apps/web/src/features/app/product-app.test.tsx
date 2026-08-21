@@ -78,6 +78,18 @@ describe("product app", () => {
     expect(screen.getByText("Test Org")).toBeInTheDocument();
   });
 
+  it("selects the backend default model instead of the first catalog entry", async () => {
+    vi.stubGlobal("fetch", vi.fn(workspaceFetch));
+
+    render(<ProductApp />);
+
+    const select = await screen.findByLabelText("Model");
+    await waitFor(() => {
+      expect(select).toHaveValue("openai-compatible-chat");
+    });
+    expect(screen.getByRole("option", { name: "Qwen 2.5 3B Local" })).toBeInTheDocument();
+  });
+
   it("redirects unauthenticated users to backend OIDC login", async () => {
     const assignMock = vi.fn();
     Object.defineProperty(window, "location", {
@@ -257,7 +269,27 @@ async function workspaceFetch(input: RequestInfo | URL, init?: RequestInit): Pro
     return jsonResponse([{ id: "project-1", name: "IR Triage", description: null }]);
   }
   if (url.endsWith("/api/v1/models")) {
-    return jsonResponse({ data: [] });
+    return jsonResponse({
+      default_model: "openai-compatible-chat",
+      data: [
+        {
+          key: "mock-analyst-1",
+          display_name: "Mock Analyst 1",
+          description: "Mock model",
+          context_window: 32768,
+          max_output_tokens: 4096,
+          tasks: ["chat"],
+        },
+        {
+          key: "openai-compatible-chat",
+          display_name: "Qwen 2.5 3B Local",
+          description: "Local Ollama model",
+          context_window: 32768,
+          max_output_tokens: 2048,
+          tasks: ["chat"],
+        },
+      ],
+    });
   }
   if (url.endsWith("/api/v1/billing/limits")) {
     return jsonResponse({

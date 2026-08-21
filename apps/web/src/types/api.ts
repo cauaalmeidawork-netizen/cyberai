@@ -73,6 +73,7 @@ export interface ModelInfo {
 
 export interface ModelListResponse {
   data: ModelInfo[];
+  default_model: string;
 }
 
 export interface Quota {

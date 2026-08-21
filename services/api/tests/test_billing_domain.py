@@ -32,7 +32,10 @@ def test_entitlements_enforce_model_and_rag_restrictions() -> None:
     subscription = Subscription(org_id=uuid4(), plan_key="free")
 
     assert service.can_use_model(subscription, "mock-analyst-1").allowed is True
-    denied_model = service.can_use_model(subscription, "openai-compatible-chat")
+    local_model = service.can_use_model(subscription, "openai-compatible-chat")
+    assert local_model.allowed is True
+
+    denied_model = service.can_use_model(subscription, "unknown-model")
     assert denied_model.allowed is False
     assert denied_model.reason == "model_not_allowed"
 

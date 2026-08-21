@@ -21,13 +21,15 @@ from cyberai.core.config import Environment
 from cyberai.core.errors import ForbiddenError
 from cyberai.modules.auth import SessionService
 from cyberai.platform.db import TenantContext
-from cyberai.platform.db.models import Membership, Organization, User
+from cyberai.platform.db.models import Identity, Membership, Organization, User
 
 router = APIRouter(tags=["auth"], prefix="/auth")
 
 _CSRF_COOKIE_NAME = "cyberai_csrf"
 _LOCAL_ORG_SLUG = "local-dev"
 _LOCAL_IDENTITY_ID = "local-dev"
+_LOCAL_IDENTITY_ISSUER = "local"
+_LOCAL_IDENTITY_SUBJECT = "local-dev"
 
 
 @router.get("/dev-login")
@@ -93,6 +95,26 @@ async def dev_login(
             membership.role = "owner"
             session.add(membership)
 
+        identity = await session.scalar(
+            select(Identity).where(
+                Identity.issuer == _LOCAL_IDENTITY_ISSUER,
+                Identity.subject == _LOCAL_IDENTITY_SUBJECT,
+            )
+        )
+        if identity is None:
+            session.add(
+                Identity(
+                    user_id=user.id,
+                    issuer=_LOCAL_IDENTITY_ISSUER,
+                    subject=_LOCAL_IDENTITY_SUBJECT,
+                    email=user.email,
+                )
+            )
+        elif identity.user_id != user.id or identity.email != user.email:
+            identity.user_id = user.id
+            identity.email = user.email
+            session.add(identity)
+
         user_id = user.id
         membership_id = membership.id
 
@@ -104,8 +126,6 @@ async def dev_login(
     )
 
     redirect_target = _safe_return_to(return_to) or "/"
-    if redirect_target.startswith("/") and settings.app.cors_origins:
-        redirect_target = f"{str(settings.app.cors_origins[0]).rstrip('/')}{redirect_target}"
 
     response = RedirectResponse(redirect_target, status_code=302)
     response.set_cookie(value=created.token, **session_cookie_options(settings, created.expires_at))

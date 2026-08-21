@@ -10,21 +10,19 @@ contains the first milestone (M0): a runnable foundation.
 # 1. Clone and enter the repository
 cd cyberai
 
-# 2. Copy the example environment file and adjust if needed
-cp .env.example .env
+# 2. Ensure Docker and Ollama are running, with qwen2.5:3b installed
 
-# 3. Run migrations, then start the full stack with Docker Compose
-docker compose -f infra/compose/docker-compose.yml --profile migrate run --rm migrate
-docker compose -f infra/compose/docker-compose.yml up --build
+# 3. Start the local stack
+powershell -ExecutionPolicy Bypass -File scripts/dev-local.ps1
 ```
 
 After startup:
 
 - Web UI: http://localhost:3000
-- API: http://localhost:8000
-- API docs (local only): http://localhost:8000/docs
-- Liveness: http://localhost:8000/health/live
-- Readiness: http://localhost:8000/health/ready
+- API: http://localhost:8001
+- API docs (local only): http://localhost:8001/docs
+- Liveness: http://localhost:8001/health/live
+- Readiness: http://localhost:8001/health/ready
 
 ## Development without Docker
 
@@ -36,7 +34,7 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 cd services/api
 uv sync --all-groups
 uv run alembic upgrade head
-uv run uvicorn cyberai.main:create_app --factory --reload
+uv run uvicorn cyberai.main:create_app --factory --host 127.0.0.1 --port 8001 --reload
 ```
 
 Run tests (requires PostgreSQL + Redis):

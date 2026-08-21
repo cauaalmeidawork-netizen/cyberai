@@ -7,7 +7,7 @@ type RouteContext = {
 const API_PROXY_TARGET =
   process.env.API_PROXY_TARGET ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://localhost:8000";
+  "http://localhost:8001";
 
 function readSetCookies(headers: Headers): string[] {
   const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };

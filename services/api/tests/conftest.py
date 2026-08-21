@@ -98,7 +98,7 @@ def test_user_token(test_user: User, settings: Settings) -> str:
 
 @pytest.fixture
 async def app_client() -> AsyncIterator[AsyncClient]:
-    app: FastAPI = create_app()
+    app: FastAPI = create_app(Settings())
     async with (
         LifespanManager(app) as manager,
         AsyncClient(
