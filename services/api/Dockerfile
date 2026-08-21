@@ -23,6 +23,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY src /app/src
 RUN uv sync --frozen --no-dev
+RUN uv pip install "cryptography>=43.0.0"
 
 FROM python:3.12-slim AS runtime
 
