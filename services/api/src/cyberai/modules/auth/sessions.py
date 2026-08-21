@@ -14,6 +14,7 @@ from cyberai.modules.auth.principal import AuthenticatedPrincipal
 from cyberai.modules.auth.roles import parse_role, permissions_for_role
 from cyberai.platform.db import Database
 from cyberai.platform.db.models import AuthSession, Membership, User
+from cyberai.platform.db.tenant import TenantContext, apply_tenant_context
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +72,12 @@ class SessionService:
             )
             if row is None:
                 return None
+
+            # auth_sessions is intentionally global so the opaque token can be
+            # resolved before a tenant is known. Once the session reveals the
+            # active organization, bind that tenant before reading users (RLS).
+            await apply_tenant_context(session, TenantContext(org_id=row.active_org_id))
+
             membership = await session.scalar(
                 select(Membership).where(
                     Membership.id == row.membership_id,
