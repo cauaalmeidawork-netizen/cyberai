@@ -16,10 +16,20 @@ export function AuthEntry() {
     })
       .then((response) => {
         if (cancelled) return;
-        if (response.status === 401) {
+
+        const currentUrl = new URL(window.location.href);
+        const returnedFromAuth = currentUrl.searchParams.get("_auth") === "1";
+
+        if (response.status === 401 && !returnedFromAuth) {
           window.location.replace("/api/v1/auth/login?return_to=%2F");
           return;
         }
+
+        if (returnedFromAuth) {
+          currentUrl.searchParams.delete("_auth");
+          window.history.replaceState({}, "", currentUrl.pathname + currentUrl.search + currentUrl.hash);
+        }
+
         setReady(true);
       })
       .catch(() => {
