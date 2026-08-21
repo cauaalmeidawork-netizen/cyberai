@@ -31,7 +31,9 @@ _DEFAULT_PLANS: tuple[Plan, ...] = (
             monthly_input_tokens=100_000,
             monthly_output_tokens=50_000,
             monthly_total_tokens=150_000,
-            allowed_models=frozenset({"mock-analyst-1", "mock-analyst-mini"}),
+            allowed_models=frozenset(
+                {"mock-analyst-1", "mock-analyst-mini", "openai-compatible-chat"}
+            ),
             rag_allowed=False,
             document_limit=5,
             rate_limit_requests=30,
