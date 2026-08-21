@@ -13,21 +13,16 @@ $ApiLog = Join-Path $StateDir "api.log"
 $WebLog = Join-Path $StateDir "web.log"
 $ApiPidFile = Join-Path $StateDir "api.pid"
 $WebPidFile = Join-Path $StateDir "web.pid"
+$ProcessHelper = Join-Path $PSScriptRoot "local-process.ps1"
+. $ProcessHelper
 
 function Write-Step([string] $Message) {
-    Write-Host "[cyberai-local] $Message"
+    Write-CyberAILocalStep $Message
 }
 
 function Assert-Command([string] $Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "Required command '$Name' was not found in PATH."
-    }
-}
-
-function Assert-PortFree([int] $Port, [string] $Name) {
-    $connection = Test-NetConnection 127.0.0.1 -Port $Port -WarningAction SilentlyContinue
-    if ($connection.TcpTestSucceeded) {
-        throw "$Name port $Port is already in use. Stop the process that owns it or choose another port. This script will not kill unknown processes."
     }
 }
 
@@ -119,21 +114,18 @@ function Start-LoggedProcess(
     [string] $PidPath
 ) {
     $errorLogPath = $LogPath -replace "\.log$", ".err.log"
-    if (Test-Path $PidPath) {
-        $existingPid = Get-Content $PidPath -ErrorAction SilentlyContinue
-        if ($existingPid -and (Get-Process -Id ([int] $existingPid) -ErrorAction SilentlyContinue)) {
-            throw "$Name already appears to be running with PID $existingPid. Run scripts/stop-local.ps1 first."
-        }
-    }
+    Clear-StalePidFile -Path $PidPath -Name $Name -Root $Root -ExcludeProcessIds (Get-CurrentProcessLineageIds)
     if (Test-Path $LogPath) {
         Remove-Item -LiteralPath $LogPath -Force
     }
     if (Test-Path $errorLogPath) {
         Remove-Item -LiteralPath $errorLogPath -Force
     }
+    $workingDirectoryLiteral = ConvertTo-PowerShellSingleQuotedString $WorkingDirectory
+    $wrappedCommand = "Set-Location -LiteralPath $workingDirectoryLiteral; $Command"
     $process = Start-Process `
         -FilePath "powershell" `
-        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $Command) `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $wrappedCommand) `
         -WorkingDirectory $WorkingDirectory `
         -RedirectStandardOutput $LogPath `
         -RedirectStandardError $errorLogPath `
@@ -144,6 +136,16 @@ function Start-LoggedProcess(
 }
 
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
+
+$currentLineage = Get-CurrentProcessLineageIds
+Write-Step "Cleaning up stale CyberAI local processes."
+Clear-StalePidFile -Path $ApiPidFile -Name "FastAPI" -Root $Root -ExcludeProcessIds $currentLineage
+Clear-StalePidFile -Path $WebPidFile -Name "Next.js" -Root $Root -ExcludeProcessIds $currentLineage
+Stop-CyberAIListenersOnPort -Port 8001 -Name "FastAPI" -Root $Root -ExcludeProcessIds $currentLineage -FailOnExternal
+Stop-CyberAIListenersOnPort -Port 3000 -Name "Next.js" -Root $Root -ExcludeProcessIds $currentLineage -FailOnExternal
+Stop-CyberAIOrphanProcesses -Root $Root -ExcludeProcessIds $currentLineage
+Assert-PortAvailable -Port 8001 -Name "CyberAI API" -Root $Root -ExcludeProcessIds $currentLineage
+Assert-PortAvailable -Port 3000 -Name "CyberAI web" -Root $Root -ExcludeProcessIds $currentLineage
 
 Write-Step "Validating local dependencies."
 Assert-Command "docker"
@@ -159,9 +161,6 @@ try {
 if (-not (@($models.data) | Where-Object { $_.id -eq "qwen2.5:3b" })) {
     throw "Ollama is reachable, but model qwen2.5:3b is not installed. Run: ollama pull qwen2.5:3b"
 }
-
-Assert-PortFree 8001 "CyberAI API"
-Assert-PortFree 3000 "CyberAI web"
 
 Ensure-ApiEnv
 Ensure-WebEnv
