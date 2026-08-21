@@ -263,6 +263,39 @@ class Message(Base):
     )
 
 
+class ChatIdempotencyKey(Base):
+    __tablename__ = "chat_idempotency_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("conversations.id"), index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128))
+    request_hash: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(16), default="in_progress")
+    user_message_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("messages.id"))
+    assistant_message_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("messages.id"))
+    model_key: Mapped[str | None] = mapped_column(String(128))
+    provider: Mapped[str | None] = mapped_column(String(64))
+    finish_reason: Mapped[str | None] = mapped_column(String(32))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    is_fallback: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        UniqueConstraint(
+            "org_id",
+            "conversation_id",
+            "idempotency_key",
+            name="uq_chat_idempotency_org_conversation_key",
+        ),
+    )
+
+
 class Document(Base):
     __tablename__ = "documents"
 

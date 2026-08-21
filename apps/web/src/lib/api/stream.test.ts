@@ -48,4 +48,52 @@ describe("SSE chat client", () => {
       },
     ]);
   });
+
+  it("sends idempotency and RAG intent separately from request correlation", async () => {
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              controller.close();
+            },
+          }),
+          { status: 200 },
+        ),
+    );
+
+    for await (const _event of streamConversationMessage({
+      baseUrl: "",
+      token: "test-token",
+      projectId: "project-1",
+      conversationId: "conversation-1",
+      idempotencyKey: "turn-key-1",
+      payload: {
+        messages: [{ role: "user", content: "hello" }],
+        max_tokens: 256,
+        temperature: 0.2,
+        rag_enabled: true,
+      },
+      fetchImpl,
+    })) {
+      // Drain the stream.
+    }
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "/api/v1/projects/project-1/conversations/conversation-1/messages",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-token",
+          "Idempotency-Key": "turn-key-1",
+        }),
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "hello" }],
+          max_tokens: 256,
+          temperature: 0.2,
+          rag_enabled: true,
+        }),
+      }),
+    );
+  });
 });

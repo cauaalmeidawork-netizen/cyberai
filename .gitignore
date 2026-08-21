@@ -27,6 +27,8 @@ out/
 .turbo/
 next-env.d.ts
 *.tsbuildinfo
+playwright-report/
+test-results/
 
 # --- Editors / OS ------------------------------------------------------------
 .vscode/

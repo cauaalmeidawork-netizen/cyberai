@@ -26,6 +26,7 @@ import type {
   ChatMessage,
   Conversation,
   DocumentRecord,
+  MessageHistoryResponse,
   ModelInfo,
   ModelListResponse,
   Project,
@@ -54,7 +55,8 @@ const EMPTY_WORKSPACE: WorkspaceState = {
 
 export function ProductApp() {
   const authStore = useMemo(() => createSessionAuthStore(), []);
-  const [token, setToken] = useState<string | null>(() => authStore.getToken());
+  const [token, setToken] = useState<string | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const [authInput, setAuthInput] = useState("");
   const [workspace, setWorkspace] = useState<WorkspaceState>(EMPTY_WORKSPACE);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -67,6 +69,7 @@ export function ProductApp() {
   const [notice, setNotice] = useState<string | null>(null);
   const [lastRequestId, setLastRequestId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [ragEnabled, setRagEnabled] = useState(false);
   const [draft, setDraft] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
@@ -90,6 +93,7 @@ export function ProductApp() {
     setDocumentTitle("");
     setDocumentContent("");
     setIsSending(false);
+    setRagEnabled(false);
   }, []);
 
   const invalidateSession = useCallback(() => {
@@ -131,17 +135,38 @@ export function ProductApp() {
     setNotice("Network error. Check the API connection and try again.");
   }, []);
 
+  const loadConversationMessages = useCallback(
+    async (projectId: string, conversationId: string) => {
+      const client = makeClient();
+      const history = await client.get<MessageHistoryResponse>(
+        `/api/v1/projects/${projectId}/conversations/${conversationId}/messages?limit=100&offset=0`,
+      );
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationId]: history.messages,
+      }));
+    },
+    [makeClient],
+  );
+
   const loadProjectDetails = useCallback(
-    async (projectId: string) => {
+    async (projectId: string, preferredConversationId: string | null = null) => {
       const client = makeClient();
       const [conversations, documents] = await Promise.all([
         client.get<Conversation[]>(`/api/v1/projects/${projectId}/conversations`),
         client.get<DocumentRecord[]>(`/api/v1/projects/${projectId}/documents`),
       ]);
       setWorkspace((current) => ({ ...current, conversations, documents }));
-      setSelectedConversationId((current) => current ?? conversations[0]?.id ?? null);
+      const nextConversationId =
+        conversations.find((conversation) => conversation.id === preferredConversationId)?.id ??
+        conversations[0]?.id ??
+        null;
+      setSelectedConversationId(nextConversationId);
+      if (nextConversationId) {
+        await loadConversationMessages(projectId, nextConversationId);
+      }
     },
-    [makeClient],
+    [loadConversationMessages, makeClient],
   );
 
   const loadWorkspace = useCallback(async () => {
@@ -159,7 +184,7 @@ export function ProductApp() {
         client.get<BillingLimits>("/api/v1/billing/limits"),
         client.get<BillingUsage>("/api/v1/billing/usage"),
       ]);
-      const projectId = selectedProjectId ?? projects[0]?.id ?? null;
+      const projectId = projects[0]?.id ?? null;
       setWorkspace((current) => ({
         ...current,
         projects,
@@ -182,14 +207,31 @@ export function ProductApp() {
       setLoadState("error");
       handleApiError(error);
     }
-  }, [handleApiError, loadProjectDetails, makeClient, selectedProjectId, token]);
+  }, [handleApiError, loadProjectDetails, makeClient, token]);
 
   useEffect(() => {
+    let cancelled = false;
+    window.queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setToken(authStore.getToken());
+      setSessionReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authStore]);
+
+  useEffect(() => {
+    if (!sessionReady) {
+      return undefined;
+    }
     const timeoutId = window.setTimeout(() => {
       void loadWorkspace();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadWorkspace]);
+  }, [loadWorkspace, sessionReady]);
 
   async function handleConnect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -240,6 +282,18 @@ export function ProductApp() {
     }
   }
 
+  async function handleSelectConversation(conversationId: string) {
+    if (!selectedProjectId) {
+      return;
+    }
+    setSelectedConversationId(conversationId);
+    try {
+      await loadConversationMessages(selectedProjectId, conversationId);
+    } catch (error) {
+      handleApiError(error);
+    }
+  }
+
   async function handleCreateConversation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedProjectId || !newConversationTitle.trim()) {
@@ -256,6 +310,7 @@ export function ProductApp() {
         conversations: [conversation, ...current.conversations],
       }));
       setSelectedConversationId(conversation.id);
+      setMessagesByConversation((current) => ({ ...current, [conversation.id]: [] }));
       setNewConversationTitle("");
     } catch (error) {
       handleApiError(error);
@@ -282,6 +337,7 @@ export function ProductApp() {
 
     const controller = new AbortController();
     streamAbortRef.current = controller;
+    const idempotencyKey = createIdempotencyKey();
 
     try {
       let assistantContent = "";
@@ -290,12 +346,17 @@ export function ProductApp() {
         token,
         projectId: selectedProjectId,
         conversationId,
+        idempotencyKey,
         signal: controller.signal,
         payload: {
-          messages: nextMessages,
+          messages: nextMessages.map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
           model: selectedModel || null,
           max_tokens: 1024,
           temperature: 0.2,
+          rag_enabled: ragEnabled,
         },
       })) {
         if (event.event === "delta") {
@@ -479,7 +540,7 @@ export function ProductApp() {
                   }`}
                   key={conversation.id}
                   type="button"
-                  onClick={() => setSelectedConversationId(conversation.id)}
+                  onClick={() => void handleSelectConversation(conversation.id)}
                 >
                   <span className="truncate text-left">{conversation.title}</span>
                 </button>
@@ -534,7 +595,10 @@ export function ProductApp() {
               </div>
             ) : (
               selectedMessages.map((message, index) => (
-                <article className={`message ${message.role}`} key={`${message.role}-${index}`}>
+                <article
+                  className={`message ${message.role}`}
+                  key={message.id ?? `${message.role}-${index}`}
+                >
                   <span className="message-role">{message.role}</span>
                   <p>{message.content}</p>
                 </article>
@@ -556,6 +620,15 @@ export function ProductApp() {
               rows={3}
             />
             <div className="composer-actions">
+              <label className="rag-toggle">
+                <input
+                  type="checkbox"
+                  checked={ragEnabled}
+                  onChange={(event) => setRagEnabled(event.target.checked)}
+                  disabled={!workspace.limits?.rag_allowed || isSending}
+                />
+                <span>Use RAG</span>
+              </label>
               {isSending ? (
                 <button className="secondary-button" type="button" onClick={handleStopGeneration}>
                   <Square size={14} aria-hidden />
@@ -693,6 +766,13 @@ function QuotaMeter({ quota }: { quota: Quota }) {
       </div>
     </div>
   );
+}
+
+function createIdempotencyKey(): string {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 function messageForApiError(error: ApiError): string {

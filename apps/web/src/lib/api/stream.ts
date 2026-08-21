@@ -9,6 +9,7 @@ export interface StreamConversationMessageOptions {
   token: string;
   projectId: string;
   conversationId: string;
+  idempotencyKey?: string;
   payload: ChatCompletionPayload;
   signal?: AbortSignal;
   fetchImpl?: FetchLike;
@@ -30,6 +31,7 @@ export async function* streamConversationMessage(
         Accept: "text/event-stream",
         "Content-Type": "application/json",
         Authorization: `Bearer ${options.token}`,
+        ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
       },
       body: JSON.stringify(options.payload),
     },

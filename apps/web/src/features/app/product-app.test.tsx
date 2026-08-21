@@ -192,6 +192,129 @@ describe("product app", () => {
     expect(await screen.findByText("Use least privilege and review detections.")).toBeInTheDocument();
   });
 
+  it("loads persisted conversation history when a conversation is selected", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/v1/projects")) {
+          return jsonResponse([{ id: "project-1", name: "IR Triage", description: null }]);
+        }
+        if (url.endsWith("/api/v1/models")) {
+          return jsonResponse({ data: [] });
+        }
+        if (url.endsWith("/api/v1/billing/limits")) {
+          return jsonResponse({
+            plan: "pro",
+            quotas: [],
+            rag_allowed: true,
+            document_limit: 25,
+            allowed_models: null,
+          });
+        }
+        if (url.endsWith("/api/v1/billing/usage")) {
+          return jsonResponse({ plan: "pro", usage: [] });
+        }
+        if (url.endsWith("/api/v1/projects/project-1/conversations")) {
+          return jsonResponse([
+            { id: "conversation-1", project_id: "project-1", title: "Recovered thread" },
+          ]);
+        }
+        if (url.includes("/api/v1/projects/project-1/conversations/conversation-1/messages")) {
+          return jsonResponse({
+            messages: [
+              {
+                id: "message-1",
+                conversation_id: "conversation-1",
+                role: "user",
+                content: "What happened before reload?",
+                tokens_used: null,
+                created_at: "2026-08-20T00:00:00Z",
+              },
+              {
+                id: "message-2",
+                conversation_id: "conversation-1",
+                role: "assistant",
+                content: "Recovered persisted answer.",
+                tokens_used: 4,
+                created_at: "2026-08-20T00:00:01Z",
+              },
+            ],
+            pagination: { limit: 100, offset: 0, next_offset: null },
+          });
+        }
+        if (url.endsWith("/api/v1/projects/project-1/documents")) {
+          return jsonResponse([]);
+        }
+        return jsonResponse({});
+      }),
+    );
+
+    render(<ProductApp />);
+
+    await userEvent.type(screen.getByLabelText(/Bearer token/i), "external-token");
+    await userEvent.click(screen.getByRole("button", { name: /Connect/i }));
+
+    expect(await screen.findByText("Recovered persisted answer.")).toBeInTheDocument();
+  });
+
+  it("sends chat turns with an idempotency key and backend-controlled RAG intent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/projects")) {
+        return jsonResponse([{ id: "project-1", name: "IR Triage", description: null }]);
+      }
+      if (url.endsWith("/api/v1/models")) {
+        return jsonResponse({ data: [] });
+      }
+      if (url.endsWith("/api/v1/billing/limits")) {
+        return jsonResponse({
+          plan: "pro",
+          quotas: [],
+          rag_allowed: true,
+          document_limit: 25,
+          allowed_models: null,
+        });
+      }
+      if (url.endsWith("/api/v1/billing/usage")) {
+        return jsonResponse({ plan: "pro", usage: [] });
+      }
+      if (url.endsWith("/api/v1/projects/project-1/conversations")) {
+        return jsonResponse([{ id: "conversation-1", project_id: "project-1", title: "RAG thread" }]);
+      }
+      if (url.includes("/api/v1/projects/project-1/conversations/conversation-1/messages")) {
+        if (init?.method === "POST") {
+          expect(init.headers).toMatchObject({ "Idempotency-Key": expect.any(String) });
+          expect(JSON.parse(String(init.body))).toMatchObject({ rag_enabled: true });
+          return streamResponse("RAG-backed response.");
+        }
+        return jsonResponse({ messages: [], pagination: { limit: 100, offset: 0, next_offset: null } });
+      }
+      if (url.endsWith("/api/v1/projects/project-1/documents")) {
+        return jsonResponse([]);
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ProductApp />);
+
+    await userEvent.type(screen.getByLabelText(/Bearer token/i), "external-token");
+    await userEvent.click(screen.getByRole("button", { name: /Connect/i }));
+    await waitFor(() => {
+      expect(screen.getAllByText("RAG thread").length).toBeGreaterThan(0);
+    });
+
+    await userEvent.click(screen.getByLabelText(/Use RAG/i));
+    await userEvent.type(
+      screen.getByPlaceholderText(/Ask about detection/i),
+      "Use project documents?",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+
+    expect(await screen.findByText("RAG-backed response.")).toBeInTheDocument();
+  });
+
   it("ingests and deletes text documents through the existing JSON document API", async () => {
     vi.stubGlobal(
       "fetch",

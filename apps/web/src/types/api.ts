@@ -28,8 +28,12 @@ export interface Conversation {
 }
 
 export interface ChatMessage {
+  id?: string;
+  conversation_id?: string;
   role: Role;
   content: string;
+  tokens_used?: number | null;
+  created_at?: string;
 }
 
 export interface ChatCompletionPayload {
@@ -37,6 +41,16 @@ export interface ChatCompletionPayload {
   model?: string | null;
   max_tokens: number;
   temperature: number;
+  rag_enabled?: boolean;
+}
+
+export interface MessageHistoryResponse {
+  messages: ChatMessage[];
+  pagination: {
+    limit: number;
+    offset: number;
+    next_offset: number | null;
+  };
 }
 
 export interface DocumentRecord {
