@@ -1,14 +1,15 @@
-# CYBER AI
+# NOMERCY AI
 
-CYBER AI is a cybersecurity-focused conversational AI platform, designed as a
+Nomercy AI is a cybersecurity-specialist conversational AI, designed as a
 modular monolith that can evolve into a multi-tenant SaaS. This repository
-contains the first milestone (M0): a runnable foundation.
+contains the product: a grounded, precise assistant that researches public
+sources and answers with citations — inside a single conversation.
 
 ## Quick start
 
 ```bash
 # 1. Clone and enter the repository
-cd cyberai
+cd chatbot
 
 # 2. Ensure Docker and Ollama are running, with qwen2.5:3b installed
 
@@ -66,13 +67,13 @@ The architecture is documented in `docs/`:
 ## Repository layout
 
 ```text
-cyberai/
+chatbot/
 ├── apps/web              # Next.js frontend
 ├── services/api          # FastAPI backend (modular monolith)
 │   ├── src/cyberai/
 │   │   ├── core          # config, errors, logging, ids, context
 │   │   ├── platform      # db, cache adapters
-│   │   ├── modules       # domain modules (inference, modelgw, ...)
+│   │   ├── modules       # domain modules (inference, modelgw, research, ...)
 │   │   └── api           # HTTP layer
 │   ├── migrations        # Alembic migrations
 │   └── tests

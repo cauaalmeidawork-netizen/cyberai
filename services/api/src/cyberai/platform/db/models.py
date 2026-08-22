@@ -445,3 +445,32 @@ class Chunk(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+
+class MessageSource(Base):
+    """Citation metadata attached to an assistant message.
+
+    Stores enough to reproduce inline citations after a reload: the URL, its
+    display metadata and the citation index used in the answer text. The full
+    page body is intentionally not stored.
+    """
+
+    __tablename__ = "message_sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=new_uuid7)
+    org_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("messages.id", ondelete="CASCADE"), index=True
+    )
+    url: Mapped[str] = mapped_column(String(2048))
+    canonical_url: Mapped[str | None] = mapped_column(String(2048))
+    title: Mapped[str] = mapped_column(String(512))
+    domain: Mapped[str] = mapped_column(String(255))
+    published_at: Mapped[str | None] = mapped_column(String(64))
+    retrieved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    provider: Mapped[str] = mapped_column(String(64))
+    source_type: Mapped[str] = mapped_column(String(32))
+    authority_score: Mapped[float] = mapped_column(Float, default=0.0)
+    citation_index: Mapped[int] = mapped_column(Integer, default=0)

@@ -2,30 +2,19 @@
 
 import { useEffect, useState } from "react";
 
-import { ProductApp } from "@/features/app/product-app";
+import { AppShell } from "@/features/chat/components/app-shell";
 import { createApiClient } from "@/lib/api/client";
-import type { Conversation, Project } from "@/types/api";
+import type { Project } from "@/types/api";
 
 async function ensureStarterWorkspace() {
   const client = createApiClient({ baseUrl: "" });
   const projects = await client.get<Project[]>("/api/v1/projects");
-
-  const project =
-    projects[0] ??
-    (await client.post<Project>("/api/v1/projects", {
-      name: "General",
-      description: "Default workspace",
-    }));
-
-  const conversations = await client.get<Conversation[]>(
-    `/api/v1/projects/${project.id}/conversations`,
-  );
-  if (conversations.length > 0) {
+  if (projects.length > 0) {
     return;
   }
-
-  await client.post<Conversation>(`/api/v1/projects/${project.id}/conversations`, {
-    title: "New conversation",
+  await client.post<Project>("/api/v1/projects", {
+    name: "Geral",
+    description: null,
   });
 }
 
@@ -68,14 +57,18 @@ export function AuthEntry() {
 
         if (returnedFromAuth) {
           currentUrl.searchParams.delete("_auth");
-          window.history.replaceState({}, "", currentUrl.pathname + currentUrl.search + currentUrl.hash);
+          window.history.replaceState(
+            {},
+            "",
+            currentUrl.pathname + currentUrl.search + currentUrl.hash,
+          );
         }
 
         if (response.ok) {
           try {
             await ensureStarterWorkspace();
           } catch {
-            // ProductApp still renders manual project/conversation controls if bootstrap fails.
+            // AppShell still renders if bootstrap fails.
           }
         }
 
@@ -93,14 +86,8 @@ export function AuthEntry() {
   }, []);
 
   if (!ready) {
-    return (
-      <main className="min-h-screen bg-background text-foreground">
-        <section className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-6">
-          <p className="text-sm text-muted">Connecting…</p>
-        </section>
-      </main>
-    );
+    return null;
   }
 
-  return <ProductApp />;
+  return <AppShell />;
 }

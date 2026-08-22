@@ -1,4 +1,4 @@
-"""OpenTelemetry helpers that add CyberAI correlation attributes."""
+"""OpenTelemetry helpers that add Nomercy correlation attributes."""
 
 from __future__ import annotations
 

@@ -49,7 +49,7 @@ async def dev_login(
         if organization is None:
             organization = Organization(
                 slug=_LOCAL_ORG_SLUG,
-                display_name="CyberAI Local",
+                display_name="Nomercy Local",
                 identity_provider_id=_LOCAL_IDENTITY_ID,
             )
             session.add(organization)
@@ -67,7 +67,7 @@ async def dev_login(
             user = User(
                 org_id=org_id,
                 identity_provider_id=_LOCAL_IDENTITY_ID,
-                email="local@cyberai.dev",
+                email="local@nomercy.ai",
                 display_name="Local Developer",
                 role="owner",
                 is_active=True,

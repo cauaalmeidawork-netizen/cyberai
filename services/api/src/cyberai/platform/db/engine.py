@@ -43,7 +43,7 @@ class Database:
             pool_pre_ping=True,
             connect_args={
                 "server_settings": {
-                    "application_name": "cyberai-api",
+                    "application_name": "nomercy-api",
                     # A runaway query must not hold a pool connection forever.
                     "statement_timeout": str(settings.statement_timeout_ms),
                 },

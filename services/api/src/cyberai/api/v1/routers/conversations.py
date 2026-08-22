@@ -13,7 +13,7 @@ from typing import Annotated, Any, cast
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,11 +27,14 @@ from cyberai.modules.modelgw.types import (
     CompletionCompleted,
     CompletionStarted,
     RequestPrincipal,
+    ResearchCompleted,
+    ResearchStarted,
+    SourceEvent,
 )
 from cyberai.modules.rag.abstractions import RetrievedChunk
 from cyberai.observability.metrics import MetricsRecorder
 from cyberai.platform.db import Database
-from cyberai.platform.db.models import ChatIdempotencyKey, Conversation, Project
+from cyberai.platform.db.models import ChatIdempotencyKey, Conversation, MessageSource, Project
 from cyberai.platform.db.models import Message as DBMessage
 from cyberai.platform.db.tenant import TenantContext
 
@@ -46,6 +49,7 @@ class ConversationOut(BaseModel):
     id: str
     project_id: str
     title: str
+    created_at: datetime
 
 
 class ConversationCreate(BaseModel):
@@ -145,6 +149,7 @@ async def create_conversation(
         id=str(conv.id),
         project_id=str(conv.project_id),
         title=conv.title,
+        created_at=conv.created_at,
     )
 
 
@@ -168,9 +173,89 @@ async def list_conversations(
                 id=str(c.id),
                 project_id=str(c.project_id),
                 title=c.title,
+                created_at=c.created_at,
             )
             for c in result.scalars()
         ]
+
+
+class ConversationRename(BaseModel):
+    title: str
+
+
+@router.patch("/{conversation_id}", response_model=ConversationOut)
+async def rename_conversation(
+    project_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    payload: ConversationRename,
+    user: CurrentUserDep,
+    db: DatabaseDep,
+    request: Request,
+    settings: SettingsDep,
+) -> ConversationOut:
+    """Rename a conversation thread."""
+    require_permission(user, Permission.CONVERSATION_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
+    title = payload.title.strip()
+    if not title or len(title) > 255:
+        raise HTTPException(status_code=422, detail="Title must be 1-255 characters")
+    async with db.session(TenantContext(org_id=user.org_id)) as session:
+        conversation = await _conversation_or_404(
+            session,
+            project_id=project_id,
+            conversation_id=conversation_id,
+            org_id=user.org_id,
+        )
+        conversation.title = title
+        session.add(conversation)
+        await session.flush()
+        return ConversationOut(
+            id=str(conversation.id),
+            project_id=str(conversation.project_id),
+            title=conversation.title,
+            created_at=conversation.created_at,
+        )
+
+
+@router.delete("/{conversation_id}", status_code=204)
+async def delete_conversation(
+    project_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    user: CurrentUserDep,
+    db: DatabaseDep,
+    request: Request,
+    settings: SettingsDep,
+) -> None:
+    """Delete a conversation and its messages."""
+    require_permission(user, Permission.CONVERSATION_WRITE)
+    await require_csrf(request=request, db=db, settings=settings)
+    async with db.session(TenantContext(org_id=user.org_id)) as session:
+        await _conversation_or_404(
+            session,
+            project_id=project_id,
+            conversation_id=conversation_id,
+            org_id=user.org_id,
+        )
+
+        await session.execute(
+            delete(ChatIdempotencyKey).where(
+                ChatIdempotencyKey.org_id == user.org_id,
+                ChatIdempotencyKey.conversation_id == conversation_id,
+            )
+        )
+        await session.execute(
+            delete(DBMessage).where(
+                DBMessage.org_id == user.org_id,
+                DBMessage.conversation_id == conversation_id,
+            )
+        )
+        await session.execute(
+            delete(Conversation).where(
+                Conversation.org_id == user.org_id,
+                Conversation.id == conversation_id,
+            )
+        )
+        await session.flush()
 
 
 @router.get("/{conversation_id}/messages", response_model=MessagePageOut)
@@ -295,6 +380,7 @@ async def _stream_live_completion(
     started: dict[str, Any] | None = None
     completed: dict[str, Any] | None = None
     assistant_parts: list[str] = []
+    sources: list[dict[str, Any]] = []
 
     try:
         async for event in orchestrator.stream_chat(
@@ -312,6 +398,39 @@ async def _stream_live_completion(
                     "is_fallback": event.is_fallback,
                 }
                 yield _sse(started)
+            elif isinstance(event, ResearchStarted):
+                yield _sse(
+                    {
+                        "event": "research_started",
+                        "decision": event.decision,
+                        "queries": list(event.queries),
+                        "providers": list(event.providers),
+                    }
+                )
+            elif isinstance(event, SourceEvent):
+                sources.append(
+                    {
+                        "url": event.url,
+                        "title": event.title,
+                        "domain": event.domain,
+                        "source_type": event.source_type,
+                        "published_at": event.published_at,
+                        "citation_index": event.citation_index,
+                    }
+                )
+                yield _sse(
+                    {
+                        "event": "source",
+                        "citation_index": event.citation_index,
+                        "url": event.url,
+                        "title": event.title,
+                        "domain": event.domain,
+                        "source_type": event.source_type,
+                        "published_at": event.published_at,
+                    }
+                )
+            elif isinstance(event, ResearchCompleted):
+                yield _sse({"event": "research_completed", "source_count": event.source_count})
             elif isinstance(event, TextDelta):
                 assistant_parts.append(event.text)
                 yield _sse({"event": "delta", "text": event.text})
@@ -344,6 +463,7 @@ async def _stream_live_completion(
             idempotency_key=idempotency_key,
             request_hash=request_hash,
             result=chat_result,
+            sources=sources,
         )
         yield _sse(
             {
@@ -580,6 +700,7 @@ async def _persist_chat_result(
     idempotency_key: str | None,
     request_hash: str,
     result: ChatCompletionResult,
+    sources: list[dict[str, Any]] | None = None,
 ) -> None:
     # The provider call and database commit are intentionally not a distributed
     # transaction. A client only receives completed/[DONE] after this commit;
@@ -608,6 +729,23 @@ async def _persist_chat_result(
             )
             session.add_all([user_message, assistant_message])
             await session.flush()
+
+            for source in sources or []:
+                session.add(
+                    MessageSource(
+                        org_id=org_id,
+                        message_id=assistant_message.id,
+                        url=source["url"],
+                        canonical_url=None,
+                        title=source["title"],
+                        domain=source["domain"],
+                        published_at=source.get("published_at"),
+                        provider="research",
+                        source_type=source["source_type"],
+                        authority_score=0.0,
+                        citation_index=source["citation_index"],
+                    )
+                )
 
             if idempotency_key is not None:
                 record = await session.scalar(

@@ -25,6 +25,7 @@ export interface Conversation {
   id: string;
   project_id: string;
   title: string;
+  created_at?: string;
 }
 
 export interface ChatMessage {
@@ -35,6 +36,15 @@ export interface ChatMessage {
   tokens_used?: number | null;
   created_at?: string;
   isPending?: boolean;
+  sources?: SourceCitation[];
+  researchStatus?: "searching" | "done" | null;
+  researchProviders?: string[];
+  attachments?: AttachmentRef[];
+}
+
+export interface AttachmentRef {
+  name: string;
+  size: number;
 }
 
 export interface ChatCompletionPayload {
@@ -137,6 +147,25 @@ export type ChatStreamEvent =
       text: string;
     }
   | {
+      event: "research_started";
+      decision: "quick" | "deep";
+      queries: string[];
+      providers?: string[];
+    }
+  | {
+      event: "source";
+      citation_index: number;
+      url: string;
+      title: string;
+      domain: string;
+      source_type: string;
+      published_at: string | null;
+    }
+  | {
+      event: "research_completed";
+      source_count: number;
+    }
+  | {
       event: "completed";
       finish_reason: string;
       usage: {
@@ -149,3 +178,12 @@ export type ChatStreamEvent =
       message: string;
       code?: string;
     };
+
+export interface SourceCitation {
+  citation_index: number;
+  url: string;
+  title: string;
+  domain: string;
+  source_type: string;
+  published_at: string | null;
+}

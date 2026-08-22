@@ -134,6 +134,19 @@ def _prompt_injection_violation(normalized: str) -> PolicyViolation | None:
 
 
 def _is_defensive_context(normalized: str) -> bool:
+    # Phrases that describe evasion are offensive even though they contain a
+    # defensive-looking substring such as "detection".
+    evasion = (
+        "evade detection",
+        "bypass detection",
+        "evade edr",
+        "bypass edr",
+        "avoid detection",
+        "hide from",
+        "disable antivirus",
+    )
+    if any(phrase in normalized for phrase in evasion):
+        return False
     defensive_markers = (
         "defensive",
         "detection",

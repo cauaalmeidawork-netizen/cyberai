@@ -21,7 +21,7 @@ async def test_liveness(app_client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["service"] == "cyberai-api"
+    assert body["service"] == "nomercy-api"
     assert "version" in body
 
 
@@ -44,7 +44,7 @@ async def test_meta_endpoint(app_client: AsyncClient) -> None:
     response = await app_client.get("/api/v1/meta")
     assert response.status_code == 200
     body = response.json()
-    assert body["service"] == "cyberai-api"
+    assert body["service"] == "nomercy-api"
     assert body["api_version"] == "v1"
 
 

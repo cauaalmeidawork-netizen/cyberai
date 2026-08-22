@@ -144,4 +144,39 @@ class CompletionCompleted:
     record: UsageRecord
 
 
-GatewayEvent = CompletionStarted | TextDelta | CompletionCompleted
+@dataclass(frozen=True, slots=True)
+class ResearchStarted:
+    """Emitted when a research phase begins (before any model output)."""
+
+    decision: str
+    queries: tuple[str, ...]
+    providers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SourceEvent:
+    """One retrieved, citable source surfaced to the client."""
+
+    citation_index: int
+    url: str
+    title: str
+    domain: str
+    source_type: str
+    published_at: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ResearchCompleted:
+    """Emitted when the research phase is done and generation begins."""
+
+    source_count: int
+
+
+GatewayEvent = (
+    CompletionStarted
+    | TextDelta
+    | CompletionCompleted
+    | ResearchStarted
+    | SourceEvent
+    | ResearchCompleted
+)

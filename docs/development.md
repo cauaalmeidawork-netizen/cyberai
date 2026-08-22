@@ -21,7 +21,7 @@ Local traffic is intentionally same-origin from the browser:
 Browser -> Next.js localhost:3000 -> /api proxy -> FastAPI localhost:8001 -> Ollama localhost:11434
 ```
 
-Stop only the CyberAI local processes and containers:
+Stop only the Nomercy local processes and containers:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/stop-local.ps1

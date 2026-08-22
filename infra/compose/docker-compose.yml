@@ -44,22 +44,22 @@ services:
       redis:
         condition: service_healthy
     environment:
-      CYBERAI_ENVIRONMENT: local
-      CYBERAI_DEBUG: "true"
-      CYBERAI_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER:-cyberai}:${POSTGRES_PASSWORD:-cyberai_dev_password}@postgres:5432/${POSTGRES_DB:-cyberai}
-      CYBERAI_REDIS__URL: redis://redis:6379/0
-      CYBERAI_LOGGING__FORMAT: console
-      CYBERAI_LOGGING__LEVEL: DEBUG
-      CYBERAI_APP__TRUSTED_HOSTS: '["localhost","127.0.0.1","cyberai-api"]'
-      CYBERAI_APP__EXPOSE_DOCS: "true"
-      CYBERAI_OPENAI_COMPATIBLE__ENABLED: "true"
-      CYBERAI_OPENAI_COMPATIBLE__API_KEY: ollama
-      CYBERAI_OPENAI_COMPATIBLE__BASE_URL: http://host.docker.internal:11434/v1
-      CYBERAI_OPENAI_COMPATIBLE__MODEL: qwen2.5:3b
-      CYBERAI_OPENAI_COMPATIBLE__MODEL_KEY: openai-compatible-chat
-      CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME: Qwen 2.5 3B Local
-      CYBERAI_MODELS__DEFAULT_MODEL: openai-compatible-chat
-      CYBERAI_MODELS__FALLBACK_MODELS: "[]"
+      NOMERCY_ENVIRONMENT: local
+      NOMERCY_DEBUG: "true"
+      NOMERCY_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER:-cyberai}:${POSTGRES_PASSWORD:-cyberai_dev_password}@postgres:5432/${POSTGRES_DB:-cyberai}
+      NOMERCY_REDIS__URL: redis://redis:6379/0
+      NOMERCY_LOGGING__FORMAT: console
+      NOMERCY_LOGGING__LEVEL: DEBUG
+      NOMERCY_APP__TRUSTED_HOSTS: '["localhost","127.0.0.1","cyberai-api"]'
+      NOMERCY_APP__EXPOSE_DOCS: "true"
+      NOMERCY_OPENAI_COMPATIBLE__ENABLED: "true"
+      NOMERCY_OPENAI_COMPATIBLE__API_KEY: ollama
+      NOMERCY_OPENAI_COMPATIBLE__BASE_URL: http://host.docker.internal:11434/v1
+      NOMERCY_OPENAI_COMPATIBLE__MODEL: qwen2.5:3b
+      NOMERCY_OPENAI_COMPATIBLE__MODEL_KEY: openai-compatible-chat
+      NOMERCY_OPENAI_COMPATIBLE__DISPLAY_NAME: Qwen 2.5 3B Local
+      NOMERCY_MODELS__DEFAULT_MODEL: openai-compatible-chat
+      NOMERCY_MODELS__FALLBACK_MODELS: "[]"
     ports:
       - "127.0.0.1:${API_PORT:-8001}:8000"
     networks:
@@ -80,10 +80,10 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      CYBERAI_ENVIRONMENT: local
-      CYBERAI_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER:-cyberai}:${POSTGRES_PASSWORD:-cyberai_dev_password}@postgres:5432/${POSTGRES_DB:-cyberai}
-      CYBERAI_REDIS__URL: redis://redis:6379/0
-      CYBERAI_LOGGING__FORMAT: console
+      NOMERCY_ENVIRONMENT: local
+      NOMERCY_DATABASE__URL: postgresql+asyncpg://${POSTGRES_USER:-cyberai}:${POSTGRES_PASSWORD:-cyberai_dev_password}@postgres:5432/${POSTGRES_DB:-cyberai}
+      NOMERCY_REDIS__URL: redis://redis:6379/0
+      NOMERCY_LOGGING__FORMAT: console
     networks:
       - cyberai
     command: ["alembic", "upgrade", "head"]

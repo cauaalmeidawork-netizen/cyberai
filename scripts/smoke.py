@@ -21,7 +21,7 @@ class SmokeResponse:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run CYBER AI deployment smoke tests.")
+    parser = argparse.ArgumentParser(description="Run Nomercy AI deployment smoke tests.")
     parser.add_argument("--base-url", required=True, help="API base URL, e.g. https://api.example.com")
     parser.add_argument("--skip-metrics", action="store_true", help="Do not check /metrics")
     args = parser.parse_args()

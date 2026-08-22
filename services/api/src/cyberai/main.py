@@ -36,7 +36,7 @@ from cyberai.core.logging import configure_logging, get_logger
 logger = get_logger(__name__)
 
 DESCRIPTION = """
-CYBER AI platform API.
+Nomercy AI API.
 
 A modular monolith with explicit boundaries: the HTTP layer only validates and
 delegates, model selection lives behind the Model Gateway, and reaching a model
@@ -73,7 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     expose_docs = settings.app.expose_docs is True
 
     app = FastAPI(
-        title="CYBER AI API",
+        title="Nomercy AI API",
         description=DESCRIPTION,
         version=settings.version,
         root_path=settings.app.root_path,

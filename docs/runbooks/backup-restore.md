@@ -6,8 +6,8 @@ PostgreSQL is the source of truth, including pgvector data. Redis is transient.
 
 ```bash
 python scripts/pg_backup.py \
-  --database-url "$CYBERAI_DATABASE__URL" \
-  --output "backups/cyberai-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  --database-url "$NOMERCY_DATABASE__URL" \
+  --output "backups/nomercy-$(date -u +%Y%m%dT%H%M%SZ).dump"
 ```
 
 Store backups in encrypted object storage with at least 30 days retention for beta.
@@ -17,8 +17,8 @@ Store backups in encrypted object storage with at least 30 days retention for be
 ```bash
 python scripts/pg_restore_check.py \
   --admin-url "$POSTGRES_ADMIN_URL" \
-  --backup backups/cyberai-latest.dump \
-  --database cyberai_restore_check
+  --backup backups/nomercy-latest.dump \
+  --database nomercy_restore_check
 ```
 
 ## Production Restore

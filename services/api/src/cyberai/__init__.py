@@ -1,3 +1,3 @@
-"""CYBER AI - Cybersecurity AI platform API."""
+"""NOMERCY AI - Cybersecurity AI platform API."""
 
 __version__ = "0.1.0"

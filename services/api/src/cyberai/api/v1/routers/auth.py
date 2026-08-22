@@ -154,7 +154,7 @@ async def callback(
         )
         if identity is None:
             if not settings.auth.oidc_auto_provision_enabled:
-                raise ForbiddenError("This identity is not authorized for CyberAI.")
+                raise ForbiddenError("This identity is not authorized for Nomercy AI.")
             raise ForbiddenError("OIDC auto-provisioning is not available in this deployment.")
         membership = await session.scalar(
             select(Membership)

@@ -66,4 +66,4 @@ Assert-True ($externalMessage -match "Port 3000 is owned by an external process"
 Assert-True ($externalMessage -match "Refusing to terminate it") `
     "Expected external process message to refuse termination."
 
-Write-Host "[cyberai-local-test] local process helper tests passed."
+Write-Host "[nomercy-local-test] local process helper tests passed."

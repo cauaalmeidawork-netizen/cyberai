@@ -21,9 +21,13 @@ from cyberai.modules.modelgw.types import (
     CompletionStarted,
     GatewayEvent,
     RequestPrincipal,
+    ResearchCompleted,
+    ResearchStarted,
+    SourceEvent,
     TaskType,
 )
 from cyberai.modules.modelgw.usage import UsageRecord, UsageStatus
+from cyberai.modules.orchestrator.persona import build_system_prompt
 from cyberai.modules.policy import (
     AbuseTracker,
     NoopSecurityAuditSink,
@@ -43,6 +47,7 @@ from cyberai.modules.policy.errors import (
     UnsafeOutputError,
 )
 from cyberai.modules.rag.abstractions import RetrievedChunk, Retriever
+from cyberai.modules.research import Evidence, ResearchOrchestrator, Source
 from cyberai.observability.metrics import MetricsRecorder, NoopMetricsRecorder
 from cyberai.observability.tracing import record_exception, start_span
 
@@ -86,6 +91,7 @@ class OrchestratorService:
         security_audit_sink: SecurityAuditSink | None = None,
         policy_profile: PolicyProfile = PolicyProfile.DEFAULT,
         metrics: MetricsRecorder | None = None,
+        research: ResearchOrchestrator | None = None,
     ) -> None:
         self._model_gateway = model_gateway
         self._limit_enforcer = limit_enforcer or NoopLimitEnforcer()
@@ -94,6 +100,7 @@ class OrchestratorService:
         self._security_audit_sink = security_audit_sink or NoopSecurityAuditSink()
         self._policy_profile = policy_profile
         self._metrics = metrics or NoopMetricsRecorder()
+        self._research = research
 
     async def stream_chat(
         self,
@@ -128,6 +135,16 @@ class OrchestratorService:
                     requested_model=model,
                     rag_enabled=rag_enabled,
                 )
+                self._inject_persona(messages_list)
+
+                if self._research is not None:
+                    async for event in self._run_research(
+                        principal=principal,
+                        model_key=model,
+                        messages=messages_list,
+                    ):
+                        yield event
+
                 if retriever and messages_list:
                     # We assume the last user message is the query for RAG
                     last_msg = messages_list[-1]
@@ -212,6 +229,120 @@ class OrchestratorService:
                         "rag_chunks_returned",
                         labels={"top_k": "3", "status": status},
                     ).set(retrieved_chunks)
+
+    def _inject_persona(self, messages_list: list[Message]) -> None:
+        """Prepend the Nomercy system prompt unless one is already present."""
+        if messages_list and messages_list[0].role == Role.SYSTEM:
+            return
+        messages_list.insert(0, Message(role=Role.SYSTEM, content=build_system_prompt()))
+
+    def _last_user_query(self, messages: list[Message]) -> str:
+        for message in reversed(messages):
+            if message.role == Role.USER and message.content:
+                return message.content
+        return ""
+
+    async def _run_research(
+        self,
+        *,
+        principal: RequestPrincipal,
+        model_key: str | None,
+        messages: list[Message],
+    ) -> AsyncIterator[GatewayEvent]:
+        assert self._research is not None
+        query = self._last_user_query(messages)
+        plan = self._research.decide(query)
+        if plan.is_empty:
+            return
+
+        yield ResearchStarted(
+            decision=plan.decision.value,
+            queries=plan.queries,
+            providers=self._research.provider_labels(plan),
+        )
+        result = await self._research.run(plan)
+        if not result.sources:
+            yield ResearchCompleted(source_count=0)
+            return
+
+        safe_sources = await self._sanitize_research_sources(
+            principal=principal,
+            model_key=model_key,
+            sources=list(result.sources),
+        )
+        if not safe_sources:
+            yield ResearchCompleted(source_count=0)
+            return
+
+        for index, source in enumerate(safe_sources, start=1):
+            yield SourceEvent(
+                citation_index=index,
+                url=source.url,
+                title=source.title,
+                domain=source.domain,
+                source_type=source.source_type.value,
+                published_at=source.published_at,
+            )
+        yield ResearchCompleted(source_count=len(safe_sources))
+        self._inject_evidence(messages, Evidence(sources=tuple(safe_sources)))
+
+    async def _sanitize_research_sources(
+        self,
+        *,
+        principal: RequestPrincipal,
+        model_key: str | None,
+        sources: list[Source],
+    ) -> list[Source]:
+        safe: list[Source] = []
+        for source in sources:
+            decision = self._policy_engine.evaluate(
+                self._policy_context(
+                    principal=principal,
+                    stage=PolicyStage.RAG,
+                    model_key=model_key,
+                    rag_enabled=True,
+                    source_type="web_research",
+                ),
+                f"{source.title}\n{source.snippet}",
+            )
+            self._record_policy_metrics("research", decision.decision.value, decision.violations)
+            await self._audit_policy_decision(
+                principal=principal,
+                decision=decision,
+                stage="research",
+                source_type="web_research",
+            )
+            if decision.decision is PolicyDecisionType.DENY:
+                continue
+            snippet = source.snippet
+            if decision.decision is PolicyDecisionType.SANITIZE:
+                snippet = ""
+            safe.append(
+                Source(
+                    url=source.url,
+                    title=source.title,
+                    domain=source.domain,
+                    source_type=source.source_type,
+                    snippet=snippet,
+                    published_at=source.published_at,
+                    provider=source.provider,
+                    authority_score=source.authority_score,
+                    relevance_score=source.relevance_score,
+                )
+            )
+        return safe
+
+    def _inject_evidence(self, messages_list: list[Message], evidence: Evidence) -> None:
+        block = evidence.block()
+        if not block:
+            return
+        if messages_list and messages_list[0].role == Role.SYSTEM:
+            messages_list[0] = Message(
+                role=Role.SYSTEM,
+                content=f"{messages_list[0].content}\n\n{block}",
+            )
+        else:
+            messages_list.insert(0, Message(role=Role.SYSTEM, content=block))
 
     def _policy_context(
         self,

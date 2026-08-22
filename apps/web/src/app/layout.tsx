@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,8 +13,22 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CYBER AI",
-  description: "Cybersecurity AI platform",
+  title: "Nomercy AI",
+  description:
+    "Nomercy AI — a precise, cybersecurity-specialist AI assistant. Ask, research, and get grounded answers with citations.",
+  applicationName: "Nomercy AI",
+  openGraph: {
+    title: "Nomercy AI",
+    description: "A precise, cybersecurity-specialist AI assistant.",
+    type: "website",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f1118",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -23,10 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
-      >
+    <html lang="pt-BR" className="dark">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>
     </html>

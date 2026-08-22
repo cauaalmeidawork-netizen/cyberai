@@ -5,12 +5,19 @@ deployment and no secret is ever committed. Values are validated at startup so
 a misconfigured service fails immediately and loudly instead of failing on the
 first request.
 
-Naming convention: ``CYBERAI_<SECTION>__<FIELD>``, e.g. ``CYBERAI_DATABASE__URL``.
+Naming convention: ``NOMERCY_<SECTION>__<FIELD>``, e.g. ``NOMERCY_DATABASE__URL``.
+
+The service was formerly branded "CyberAI". ``CYBERAI_*`` environment variables
+remain supported as a deprecated fallback so existing deployments keep working;
+``NOMERCY_*`` always wins when both prefixes are present. See
+``migrated_environment``.
 """
 
 from __future__ import annotations
 
+import os
 import re
+from collections.abc import Mapping
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -19,15 +26,61 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources import EnvSettingsSource
+from pydantic_settings.sources.utils import parse_env_vars
 
 from cyberai.core.errors import ConfigurationError
 
 _CREDENTIALS_IN_URL = re.compile(r"://([^:/@]+):([^@]+)@")
 
+#: Preferred, current environment prefix.
+_PREFERRED_PREFIX = "NOMERCY_"
+#: Deprecated legacy prefix, kept only for backward compatibility.
+_LEGACY_PREFIX = "CYBERAI_"
+
 # Values that are acceptable for local development but must never reach a
 # deployed environment.
 _INSECURE_DEFAULTS = frozenset({"cyberai_dev_password", "changeme", "postgres", "password"})
 _DEV_AUTH_JWT_SECRET = "cyberai_dev_" + "jwt_secret_do_not_use_in_prod"
+
+
+def migrated_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Merge the legacy ``CYBERAI_*`` and preferred ``NOMERCY_*`` namespaces.
+
+    ``NOMERCY_*`` always wins over ``CYBERAI_*`` for the same key. The returned
+    mapping keeps ``CYBERAI_*`` as the primary prefix (so the rest of the config
+    system is untouched) while mirroring every ``NOMERCY_*`` variable onto its
+    ``CYBERAI_*`` equivalent.
+    """
+    source = os.environ if environ is None else environ
+    merged: dict[str, str] = {}
+    overrides: dict[str, str] = {}
+    for key, value in source.items():
+        upper = key.upper()
+        if upper.startswith(_PREFERRED_PREFIX):
+            overrides[_LEGACY_PREFIX + upper[len(_PREFERRED_PREFIX) :]] = value
+        else:
+            merged[key] = value
+    merged.update(overrides)
+    return merged
+
+
+class _NomercyEnvSettingsSource(EnvSettingsSource):
+    """Env source that reads a prefix-migrated view of the environment."""
+
+    def _load_env_vars(self) -> Mapping[str, str | None]:
+        if self.case_sensitive and _environ_is_case_insensitive():
+            self.case_sensitive = False
+        return parse_env_vars(
+            migrated_environment(),
+            self.case_sensitive,
+            self.env_ignore_empty,
+            self.env_parse_none_str,
+        )
+
+
+def _environ_is_case_insensitive() -> bool:
+    return os.name == "nt"
 
 
 class Environment(StrEnum):
@@ -53,7 +106,7 @@ def _database_uses_insecure_default(url: str) -> bool:
 
 
 class AppSettings(BaseModel):
-    name: str = "cyberai-api"
+    name: str = "nomercy-api"
     root_path: str = ""
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     trusted_hosts: list[str] = Field(
@@ -226,6 +279,26 @@ class PolicySettings(BaseModel):
     abuse_window_seconds: Annotated[int, Field(ge=1)] = 300
 
 
+class ResearchSettings(BaseModel):
+    """Web research and authoritative security source configuration.
+
+    Every provider is optional: only adapters that are actually configured are
+    activated at runtime, and a development environment without any paid API key
+    still works (research is simply skipped, or limited to the public security
+    sources that need no key).
+    """
+
+    enabled: bool = False
+    primary_provider: str | None = None
+    brave_api_key: SecretStr | None = None
+    exa_api_key: SecretStr | None = None
+    tavily_api_key: SecretStr | None = None
+    firecrawl_api_key: SecretStr | None = None
+    max_sources: Annotated[int, Field(ge=1, le=30)] = 6
+    request_timeout_seconds: Annotated[float, Field(gt=0)] = 15.0
+    cache_ttl_seconds: Annotated[int, Field(ge=0)] = 900
+
+
 class BuildSettings(BaseModel):
     """Safe build metadata surfaced in health/meta endpoints."""
 
@@ -241,6 +314,25 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: Any,
+        env_settings: Any,
+        dotenv_settings: Any,
+        file_secret_settings: Any,
+    ) -> tuple[Any, ...]:
+        config = settings_cls.model_config
+        nomercy_env = _NomercyEnvSettingsSource(
+            settings_cls,
+            case_sensitive=config.get("case_sensitive"),
+            env_prefix=config.get("env_prefix"),
+            env_nested_delimiter=config.get("env_nested_delimiter"),
+            env_ignore_empty=config.get("env_ignore_empty"),
+        )
+        return (init_settings, nomercy_env, dotenv_settings, file_secret_settings)
 
     environment: Environment = Environment.LOCAL
     debug: bool = False
@@ -259,6 +351,7 @@ class Settings(BaseSettings):
     )
     billing: BillingSettings = Field(default_factory=BillingSettings)
     policy: PolicySettings = Field(default_factory=PolicySettings)
+    research: ResearchSettings = Field(default_factory=ResearchSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
 
     @model_validator(mode="after")

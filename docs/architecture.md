@@ -1,6 +1,6 @@
 # Architecture
 
-CYBER AI is a cybersecurity conversational AI platform. This document is a
+Nomercy AI is a cybersecurity conversational AI platform. This document is a
 synthetic, up-to-date view of the approved architecture.
 
 ## High-level flow

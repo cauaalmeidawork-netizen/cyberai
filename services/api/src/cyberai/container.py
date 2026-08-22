@@ -30,6 +30,7 @@ from cyberai.modules.modelgw import (
 from cyberai.modules.orchestrator.service import OrchestratorService
 from cyberai.modules.policy import AbuseTracker, NoopPolicyEngine, PolicyEngine, PolicyProfile
 from cyberai.modules.policy.audit import SecurityAuditRecorder
+from cyberai.modules.research import ResearchOrchestrator
 from cyberai.observability import PrometheusMetricsRecorder
 from cyberai.platform.cache import RedisCache
 from cyberai.platform.db import Database
@@ -104,6 +105,7 @@ def build_services(settings: Settings) -> Services:
         PersistentUsageSink(billing_repository),
         metrics=metrics,
     )
+    research_orchestrator = ResearchOrchestrator(settings.research, cache_client=cache.client)
     orchestrator = OrchestratorService(
         model_gateway,
         limit_enforcer=limit_enforcer if settings.billing.enabled else None,
@@ -112,6 +114,7 @@ def build_services(settings: Settings) -> Services:
         security_audit_sink=security_audit_recorder if settings.policy.enabled else None,
         policy_profile=PolicyProfile(settings.policy.profile),
         metrics=metrics,
+        research=research_orchestrator,
     )
 
     logger.info(

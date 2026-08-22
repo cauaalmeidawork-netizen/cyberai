@@ -116,7 +116,7 @@ async def create_checkout_session(
     customer = await repository.get_billing_customer(org_id=user.org_id, provider="stripe")
     if customer is None:
         customer_id = await provider.create_customer(
-            name=f"CyberAI organization {user.org_id}",
+            name=f"Nomercy AI organization {user.org_id}",
             metadata={"org_id": str(user.org_id)},
             idempotency_key=f"stripe-customer:{user.org_id}",
         )

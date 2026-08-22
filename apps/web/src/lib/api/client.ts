@@ -79,6 +79,9 @@ export function createApiClient(options: ApiClientOptions) {
     post<T>(path: string, body: unknown, options?: ApiRequestOptions) {
       return request<T>("POST", path, body, options);
     },
+    patch<T>(path: string, body: unknown, options?: ApiRequestOptions) {
+      return request<T>("PATCH", path, body, options);
+    },
     delete<T>(path: string, options?: ApiRequestOptions) {
       return request<T>("DELETE", path, undefined, options);
     },
