@@ -73,7 +73,7 @@ export function MessageList({
         className="flex-1 overflow-y-auto overscroll-contain"
         aria-live="polite"
       >
-        <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 pb-8 pt-6 sm:px-6">
+        <div className="mx-auto flex w-full max-w-[840px] flex-col gap-8 px-4 pb-8 pt-6 sm:px-6">
           {messages.map((message, index) => {
             if (message.role === "user") {
               return <UserMessage key={message.id ?? `user-${index}`} message={message} />;

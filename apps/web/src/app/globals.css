@@ -110,19 +110,19 @@ body {
   pointer-events: none;
   background:
     radial-gradient(
-      1100px 600px at 50% -10%,
-      oklch(0.28 0.05 280 / 0.14),
+      1200px 800px at 50% -20%,
+      oklch(0.24 0.04 275 / 0.06),
+      transparent 70%
+    ),
+    radial-gradient(
+      1000px 600px at 80% 120%,
+      oklch(0.20 0.05 310 / 0.05),
       transparent 65%
     ),
     radial-gradient(
-      900px 500px at 82% 110%,
-      oklch(0.32 0.08 320 / 0.08),
-      transparent 60%
-    ),
-    radial-gradient(
-      600px 400px at 15% 95%,
-      oklch(0.28 0.06 25 / 0.04),
-      transparent 55%
+      600px 400px at 15% 90%,
+      oklch(0.585 0.215 25 / 0.02),
+      transparent 50%
     ),
     var(--background);
 }
@@ -131,7 +131,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.025;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -143,9 +143,9 @@ textarea {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 1px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: inherit;
 }
 
 ::selection {
@@ -290,9 +290,8 @@ textarea {
 }
 
 .markdown-body pre {
-  margin: 1em 0;
-  border-radius: var(--radius-md);
-  overflow: hidden;
+  margin: 0;
+  background: transparent;
 }
 
 .markdown-body a {

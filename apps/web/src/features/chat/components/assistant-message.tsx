@@ -35,7 +35,7 @@ export function AssistantMessage({
 
   return (
     <div className="group relative">
-      <div className="max-w-[880px]">
+      <div className="max-w-[840px]">
         <ResearchStatus status={message.researchStatus} providers={message.researchProviders} />
         {pending ? (
           <PendingIndicator />
@@ -88,10 +88,13 @@ export function AssistantMessage({
 
 function PendingIndicator() {
   return (
-    <div className="flex items-center gap-1.5 py-1" aria-label="Gerando resposta">
-      <span className="dot animate-bounce [animation-delay:0ms]" />
-      <span className="dot animate-bounce [animation-delay:120ms]" />
-      <span className="dot animate-bounce [animation-delay:240ms]" />
+    <div className="flex items-center gap-2 py-2" aria-label="Gerando resposta">
+      <span className="text-[14px] italic text-foreground-faint">Pensando</span>
+      <div className="flex items-center gap-1">
+        <span className="dot animate-bounce [animation-delay:0ms] bg-accent/60" />
+        <span className="dot animate-bounce [animation-delay:120ms] bg-accent/60" />
+        <span className="dot animate-bounce [animation-delay:240ms] bg-accent/60" />
+      </div>
     </div>
   );
 }

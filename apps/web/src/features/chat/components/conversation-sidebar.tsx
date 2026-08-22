@@ -62,8 +62,8 @@ export function ConversationSidebar({
         open ? "max-sm:translate-x-0" : "max-sm:-translate-x-full sm:hidden",
       )}
     >
-      {/* Brand header */}
-      <div className="flex items-center gap-2.5 px-4 pb-1 pt-4">
+      {/* Brand header — only visible on mobile where rail is hidden */}
+      <div className="flex items-center gap-2.5 px-4 pb-2 pt-5 sm:hidden">
         <NomercyMark className="size-5 text-accent" />
         <span className="text-[13px] font-semibold tracking-tight text-foreground">Nomercy AI</span>
         <button
@@ -71,29 +71,29 @@ export function ConversationSidebar({
           onClick={onClose}
           title="Fechar"
           aria-label="Fechar histórico"
-          className="ml-auto grid size-7 place-items-center rounded-md text-foreground-faint transition-colors duration-fast hover:text-foreground sm:hidden"
+          className="ml-auto grid size-7 place-items-center rounded-md text-foreground-faint transition-colors duration-fast hover:text-foreground"
         >
           <X size={15} aria-hidden />
         </button>
       </div>
 
-      {/* New conversation — simple action, not a card */}
+      {/* New conversation — simple row, mobile only or minimal */}
       <button
         type="button"
         onClick={onNew}
-        className="mx-3 mt-3 mb-1 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] text-foreground-muted transition-colors duration-fast hover:bg-surface-hover hover:text-foreground"
+        className="mx-3 mt-3 mb-2 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-foreground-muted transition-colors duration-fast hover:bg-surface-hover hover:text-foreground sm:hidden"
       >
         <Plus size={15} aria-hidden className="text-foreground-faint" />
         Nova conversa
       </button>
 
       {/* Search — transparent, subtle */}
-      <div className="mx-3 mt-1 mb-2 flex items-center gap-2 rounded-lg px-2.5">
+      <div className="mx-3 mt-2 mb-3 flex items-center gap-2 rounded-[10px] bg-surface-hover/30 px-2.5 py-0.5 border border-transparent focus-within:border-subtle focus-within:bg-surface-2 transition-colors">
         <Search size={13} aria-hidden className="shrink-0 text-foreground-faint" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Buscar conversas"
+          placeholder="Buscar conversas..."
           className="h-8 w-full bg-transparent text-[13px] text-foreground placeholder:text-foreground-faint focus:outline-none"
         />
       </div>
@@ -101,13 +101,13 @@ export function ConversationSidebar({
       {/* Conversation list — no cards, clean rows */}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {groups.length === 0 ? (
-          <p className="px-3 py-8 text-center text-xs text-foreground-faint">
+          <p className="px-3 py-8 text-center text-[12.5px] text-foreground-faint">
             Nenhuma conversa ainda.
           </p>
         ) : (
           groups.map((group) => (
-            <div key={group.label} className="mb-0.5">
-              <p className="px-3 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-foreground-faint">
+            <div key={group.label} className="mb-2">
+              <p className="px-3 pb-1.5 pt-3 text-[10.5px] font-medium uppercase tracking-widest text-foreground-faint/70">
                 {group.label}
               </p>
               <ul className="grid gap-px">

@@ -22,20 +22,22 @@ export function EmptyState({
       <h1 className="text-balance text-center text-2xl font-semibold tracking-tight text-foreground sm:text-[28px]">
         Como posso ajudar?
       </h1>
-      <p className="mt-3 max-w-md text-balance text-center text-[14px] leading-relaxed text-foreground-muted">
-        Pesquisa profunda, precisão técnica e respostas com fontes. Especialidade
-        em cybersecurity.
+      <p className="mt-3 max-w-md text-balance text-center text-[15px] leading-relaxed text-foreground-muted">
+        Pergunte. Eu pesquiso quando necessário.
       </p>
 
-      <div className="mt-9 flex max-w-xl flex-wrap items-center justify-center gap-2">
+      <div className="mt-10 flex max-w-lg flex-wrap items-center justify-center gap-x-4 gap-y-3">
         {SUGGESTIONS.map((suggestion) => (
           <button
             key={suggestion}
             type="button"
             onClick={() => onSuggestion(suggestion)}
-            className="rounded-full border border-subtle px-3.5 py-1.5 text-[13px] text-foreground-muted transition-all duration-fast hover:border-foreground-faint hover:text-foreground"
+            className="group flex items-center gap-2 rounded-md px-2 py-1 text-[13.5px] text-foreground-muted transition-colors duration-fast hover:text-foreground"
           >
             {suggestion}
+            <span className="font-mono text-[10px] text-foreground-faint transition-transform duration-fast group-hover:translate-x-0.5 group-hover:text-accent">
+              →
+            </span>
           </button>
         ))}
       </div>

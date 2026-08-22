@@ -99,13 +99,13 @@ export function Composer({
           className="max-h-40 min-h-[52px] w-full resize-none bg-transparent px-4 pb-2 pt-3.5 text-[15px] leading-relaxed text-foreground placeholder:text-foreground-faint focus:outline-none disabled:opacity-50"
         />
 
-        <div className="flex items-center gap-1 px-2 pb-2">
+        <div className="flex items-center gap-1.5 px-3 pb-2.5">
           <button
             type="button"
             title="Anexar arquivo"
             aria-label="Anexar arquivo"
             onClick={() => fileInputRef.current?.click()}
-            className="grid size-8 place-items-center rounded-lg text-foreground-faint transition-colors duration-fast hover:bg-surface-hover hover:text-foreground"
+            className="grid size-8 place-items-center rounded-lg text-foreground-faint transition-colors duration-fast hover:bg-surface-hover hover:text-foreground active:scale-95"
           >
             <Plus size={16} aria-hidden />
           </button>
@@ -123,7 +123,7 @@ export function Composer({
             accept=".txt,.md,.markdown,.json,.csv,.log,.yaml,.yml,.toml,.ini,.conf,.cfg,.xml,.sql,.py,.js,.ts,.tsx,.jsx,.go,.rs,.c,.h,.cpp,.hpp,.java,.kt,.rb,.php,.sh,.ps1,.html,.css"
           />
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
             <ModelPicker models={models} value={selectedModel} onChange={onSelectModel} />
             {isSending ? (
               <button
@@ -131,9 +131,9 @@ export function Composer({
                 onClick={onStop}
                 title="Parar geração"
                 aria-label="Parar geração"
-                className="grid size-9 place-items-center rounded-xl border border-subtle bg-surface-2 text-foreground transition-colors duration-fast hover:border-strong"
+                className="grid size-8 place-items-center rounded-lg border border-subtle bg-surface-2 text-foreground transition-all duration-fast hover:border-strong active:scale-95"
               >
-                <Square size={13} aria-hidden />
+                <Square size={12} aria-hidden />
               </button>
             ) : (
               <button
@@ -142,13 +142,13 @@ export function Composer({
                 title="Enviar"
                 aria-label="Enviar mensagem"
                 className={cn(
-                  "grid size-9 place-items-center rounded-xl transition-all duration-fast",
+                  "grid size-8 place-items-center rounded-lg transition-all duration-fast active:scale-95",
                   canSend
-                    ? "bg-accent text-accent-foreground hover:bg-accent-hover"
+                    ? "bg-accent text-accent-foreground hover:bg-accent-hover shadow-[0_0_12px_oklch(0.585_0.215_25/0.4)]"
                     : "bg-surface-2 text-foreground-faint",
                 )}
               >
-                <ArrowUp size={16} aria-hidden />
+                <ArrowUp size={15} aria-hidden />
               </button>
             )}
           </div>

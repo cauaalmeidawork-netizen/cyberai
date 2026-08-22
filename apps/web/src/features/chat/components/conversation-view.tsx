@@ -51,7 +51,7 @@ export function ConversationView({
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {/* Minimal header — near-invisible, only model picker and mobile menu */}
+      {/* Minimal header — near-invisible, only mobile menu */}
       <header className="flex h-11 shrink-0 items-center gap-2 px-4">
         <button
           type="button"
@@ -66,10 +66,6 @@ export function ConversationView({
         {selected ? (
           <span className="truncate text-[13px] text-foreground-faint">{selected.title}</span>
         ) : null}
-
-        <div className="ml-auto">
-          <ModelPicker models={models} value={selectedModel} onChange={onSelectModel} />
-        </div>
       </header>
 
       {/* Message scroller + Composer */}

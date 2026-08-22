@@ -11,7 +11,7 @@ export function UserMessage({ message }: { message: ChatMessage }) {
   return (
     <div className="flex justify-end">
       <div
-        className={`rounded-2xl rounded-br-lg bg-surface-raised px-4 py-2.5 ${
+        className={`rounded-[16px] rounded-br-sm bg-surface-2 px-4 py-3 ${
           isShort ? "min-w-[4rem] max-w-[70%]" : "max-w-[70%]"
         }`}
       >

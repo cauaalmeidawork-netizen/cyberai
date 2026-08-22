@@ -103,11 +103,20 @@ class ModelCatalog:
     def has(self, key: str) -> bool:
         return key in self._models
 
-    def list_all(self, *, include_unavailable: bool = False) -> tuple[ModelSpec, ...]:
+    def list_all(
+        self, *, include_unavailable: bool = False, include_internal: bool = False
+    ) -> tuple[ModelSpec, ...]:
         models = self._models.values()
-        if include_unavailable:
-            return tuple(models)
-        return tuple(model for model in models if model.is_available)
+
+        # Filter by availability
+        if not include_unavailable:
+            models = (model for model in models if model.is_available)
+
+        # Filter out internal/test providers (mock) unless explicitly requested
+        if not include_internal:
+            models = (model for model in models if model.provider != "mock")
+
+        return tuple(models)
 
     def list_for_task(self, task: TaskType) -> tuple[ModelSpec, ...]:
         return tuple(model for model in self.list_all() if model.supports(task))
