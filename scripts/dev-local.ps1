@@ -242,7 +242,7 @@ Write-Step "Starting Next.js on http://localhost:3000."
 Start-LoggedProcess `
     -Name "Next.js" `
     -WorkingDirectory $WebDir `
-    -Command "`$env:API_PROXY_TARGET='http://localhost:8001'; `$env:NEXT_PUBLIC_API_BASE_URL=''; npm run dev -- --hostname 127.0.0.1 --port 3000" `
+    -Command "`$env:API_PROXY_TARGET='http://localhost:8001'; `$env:NEXT_PUBLIC_API_BASE_URL=''; npm run dev -- --webpack --hostname 127.0.0.1 --port 3000" `
     -LogPath $WebLog `
     -PidPath $WebPidFile
 
