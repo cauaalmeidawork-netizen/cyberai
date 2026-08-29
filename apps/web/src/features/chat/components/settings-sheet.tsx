@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, X } from "lucide-react";
+import { ChevronDown, LogOut, X } from "lucide-react";
 
 import { createApiClient } from "@/lib/api/client";
+import { APP_VERSION } from "@/lib/config";
 import type { AuthMe, BillingUsage } from "@/types/api";
+import { planLabel, quotaLabel, roleLabel } from "../labels";
 import { NomercyMark } from "./mark";
 import { cn } from "@/lib/utils";
 
@@ -47,10 +49,14 @@ export function SettingsSheet({
     if (!panel) return;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    const focusables = panel.querySelectorAll<HTMLElement>(
-      'button, [href], input, [tabindex]:not([tabindex="-1"])',
-    );
-    focusables[0]?.focus();
+    const getFocusableItems = () =>
+      Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("disabled"));
+
+    getFocusableItems()[0]?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -58,7 +64,7 @@ export function SettingsSheet({
         return;
       }
       if (event.key !== "Tab") return;
-      const items = Array.from(focusables).filter((el) => !el.hasAttribute("disabled"));
+      const items = getFocusableItems();
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
@@ -80,12 +86,21 @@ export function SettingsSheet({
 
   if (!open) return null;
 
-  const organization =
+  const membership =
     authInfo?.organizations.find((org) => org.org_id === authInfo.active_org_id) ?? null;
+  const displayName = authInfo?.user_display_name ?? membership?.org_display_name ?? null;
+  const role = membership?.role ?? authInfo?.role ?? null;
+
+  const requestsQuota = usage?.usage.find((quota) => quota.resource === "requests") ?? null;
+  const technicalQuotas = (usage?.usage ?? []).filter((quota) => quota.resource !== "requests");
+  const nearLimit =
+    requestsQuota !== null && requestsQuota.limit > 0
+      ? requestsQuota.used / requestsQuota.limit >= 0.9
+      : false;
 
   return (
     <div
-      className="fixed inset-0 z-[var(--z-modal)] flex justify-end bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[var(--z-modal)] flex justify-end bg-black/40"
       onClick={onClose}
     >
       <div
@@ -94,11 +109,11 @@ export function SettingsSheet({
         aria-modal="true"
         aria-label="Configurações"
         onClick={(event) => event.stopPropagation()}
-        className="flex h-full w-full max-w-sm flex-col border-l border-subtle bg-background-deep shadow-2xl"
+        className="animate-sheet-in flex h-full w-full max-w-[420px] flex-col border-l border-hairline bg-background-deep shadow-2xl"
       >
-        <div className="flex items-center gap-2 border-b border-subtle px-4 py-3">
-          <NomercyMark className="size-5 text-accent" />
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">Configurações</h2>
+        <div className="flex items-center gap-2 px-5 py-3.5">
+          <NomercyMark className="size-[18px] text-accent" />
+          <h2 className="text-[15px] font-medium tracking-tight text-foreground">Configurações</h2>
           <button
             type="button"
             onClick={onClose}
@@ -110,81 +125,110 @@ export function SettingsSheet({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-          <Section title="Conta">
-            <Row label="Organização" value={organization?.org_display_name ?? "—"} />
-            <Row label="Função" value={authInfo?.role ?? "—"} />
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
+          {/* Conta */}
+          <section className="border-b border-hairline py-5">
+            <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.12em] text-foreground-faint">
+              Conta
+            </h3>
+            {displayName ? (
+              <p className="text-[15px] font-medium text-foreground-strong">{displayName}</p>
+            ) : null}
+            {authInfo?.user_email ? (
+              <p className="mt-0.5 text-[13px] text-foreground-muted">{authInfo.user_email}</p>
+            ) : null}
+            <div className={cn("grid gap-1.5", displayName || authInfo?.user_email ? "mt-4" : "")}>
+              <Row label="Organização" value={membership?.org_display_name} />
+              <Row label="Função" value={role ? roleLabel(role) : undefined} />
+            </div>
             <button
               type="button"
               onClick={onLogout}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-subtle bg-surface-1 px-3 py-2 text-sm text-foreground transition-colors duration-fast hover:border-danger hover:text-danger"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-md text-[13px] text-foreground-muted transition-colors duration-fast hover:text-danger"
             >
-              <LogOut size={15} aria-hidden />
+              <LogOut size={14} aria-hidden />
               Sair
             </button>
-          </Section>
+          </section>
 
-          <Section title="Uso">
+          {/* Plano */}
+          <section className="border-b border-hairline py-5">
+            <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.12em] text-foreground-faint">
+              Plano
+            </h3>
             {canReadBilling && usage ? (
-              <dl className="grid gap-2">
-                <Row label="Plano" value={usage.plan} />
-                {usage.usage.map((quota) => (
-                  <Row
-                    key={quota.resource}
-                    label={resourceLabel(quota.resource)}
-                    value={`${quota.used.toLocaleString()} / ${quota.limit.toLocaleString()}`}
-                  />
-                ))}
-              </dl>
+              <>
+                <Row label="Plano" value={planLabel(usage.plan)} />
+                {requestsQuota && requestsQuota.limit > 0 ? (
+                  <div className="mt-4">
+                    <p className="text-[13px] text-foreground-muted">
+                      {requestsQuota.used.toLocaleString("pt-BR")} de{" "}
+                      {requestsQuota.limit.toLocaleString("pt-BR")} mensagens usadas
+                    </p>
+                    <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-[width] duration-slow",
+                          nearLimit ? "bg-accent" : "bg-foreground-muted",
+                        )}
+                        style={{
+                          width: `${Math.min(100, (requestsQuota.used / requestsQuota.limit) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {technicalQuotas.length > 0 ? (
+                  <details className="group mt-4">
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[13px] text-foreground-faint transition-colors duration-fast hover:text-foreground-muted">
+                      Detalhes técnicos
+                      <ChevronDown
+                        size={13}
+                        aria-hidden
+                        className="transition-transform duration-fast group-open:rotate-180"
+                      />
+                    </summary>
+                    <div className="mt-3 grid gap-1.5">
+                      {technicalQuotas.map((quota) => (
+                        <Row
+                          key={quota.resource}
+                          label={quotaLabel(quota.resource)}
+                          value={`${quota.used.toLocaleString("pt-BR")} / ${quota.limit.toLocaleString("pt-BR")}`}
+                        />
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </>
             ) : (
-              <p className="text-xs text-foreground-faint">Informações de uso não disponíveis.</p>
+              <p className="text-[13px] text-foreground-faint">
+                Informações de uso não disponíveis.
+              </p>
             )}
-          </Section>
+          </section>
 
-          <Section title="Sobre">
+          {/* Sobre */}
+          <section className="py-5">
+            <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.12em] text-foreground-faint">
+              Sobre
+            </h3>
             <Row label="Produto" value="Nomercy AI" />
-            <p className="mt-2 text-xs leading-relaxed text-foreground-muted">
-              Uma IA conversacional especialista em cybersecurity: pesquisa fontes públicas,
-              cruza informação e responde com citações. Consultiva — nunca executa comandos.
+            <Row label="Versão" value={APP_VERSION} />
+            <p className="mt-4 text-[13px] text-foreground-faint">
+              Assistente de pesquisa e análise técnica.
             </p>
-          </Section>
+          </section>
         </div>
       </div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Row({ label, value }: { label: string; value?: string }) {
   return (
-    <section className="mb-6">
-      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wider text-foreground-faint">
-        {title}
-      </h3>
-      <div className="rounded-xl border border-subtle bg-surface-1 px-3 py-2.5">{children}</div>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-1">
-      <dt className="text-xs text-foreground-muted">{label}</dt>
-      <dd className={cn("truncate text-right text-xs text-foreground")}>{value}</dd>
+    <div className="flex items-baseline justify-between gap-4">
+      <span className="text-[13px] text-foreground-muted">{label}</span>
+      <span className="truncate text-right text-[13px] text-foreground">{value ?? "—"}</span>
     </div>
   );
-}
-
-function resourceLabel(resource: string): string {
-  switch (resource) {
-    case "requests":
-      return "Requisições";
-    case "input_tokens":
-      return "Tokens de entrada";
-    case "output_tokens":
-      return "Tokens de saída";
-    case "total_tokens":
-      return "Tokens totais";
-    default:
-      return resource;
-  }
 }

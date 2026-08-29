@@ -53,9 +53,14 @@ async def test_list_models(app_client: AsyncClient) -> None:
     response = await app_client.get("/api/v1/models")
     assert response.status_code == 200
     body = response.json()
-    assert body["default_model"] == "mock-analyst-1"
+    # The public catalog never surfaces internal/test (mock) models, even when
+    # they are the only configured providers.
+    assert body["default_model"] == ""
     keys = {model["key"] for model in body["data"]}
-    assert "mock-analyst-1" in keys
+    assert "mock-analyst-1" not in keys
+    assert "mock-analyst-mini" not in keys
+    for model in body["data"]:
+        assert "Mock Analyst" not in model["display_name"]
 
 
 @pytest.mark.asyncio

@@ -29,7 +29,8 @@ from cyberai.modules.auth import (
     generate_state,
     validate_id_token,
 )
-from cyberai.platform.db.models import Identity, Membership, OidcLoginState, Organization
+from cyberai.platform.db import TenantContext
+from cyberai.platform.db.models import Identity, Membership, OidcLoginState, Organization, User
 
 router = APIRouter(tags=["auth"], prefix="/auth")
 
@@ -51,6 +52,8 @@ class MeOut(BaseModel):
     membership_id: str | None
     role: str
     permissions: list[str]
+    user_display_name: str | None = None
+    user_email: str | None = None
     organizations: list[OrganizationMembershipOut]
 
 
@@ -182,12 +185,16 @@ async def callback(
 @router.get("/me", response_model=MeOut)
 async def me(principal: CurrentPrincipalDep, db: DatabaseDep) -> MeOut:
     memberships = await _memberships_for_user(db, principal.user_id)
+    async with db.session(TenantContext(org_id=principal.active_org_id)) as session:
+        user = await session.get(User, principal.user_id)
     return MeOut(
         user_id=str(principal.user_id),
         active_org_id=str(principal.active_org_id),
         membership_id=str(principal.membership_id) if principal.membership_id else None,
         role=principal.role.value,
         permissions=sorted(permission.value for permission in principal.permissions),
+        user_display_name=user.display_name if user else None,
+        user_email=user.email if user else None,
         organizations=memberships,
     )
 

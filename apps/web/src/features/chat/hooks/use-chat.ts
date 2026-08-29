@@ -72,7 +72,7 @@ export function useChat() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(
-    () => typeof window === "undefined" || window.innerWidth >= 640,
+    () => typeof window === "undefined" || window.innerWidth >= 1024,
   );
 
   const projectIdRef = useRef<string | null>(null);
@@ -188,7 +188,7 @@ export function useChat() {
     } catch (error) {
       handleApiError(error);
     }
-  }, [authState, handleApiError, loadMessages, makeClient]);
+  }, [authState, handleApiError, makeClient]);
 
   useEffect(() => {
     if (authState !== "authenticated") return;

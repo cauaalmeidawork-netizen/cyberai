@@ -31,10 +31,17 @@ class ModelListResponse(BaseModel):
 
 @router.get("/models", response_model=ModelListResponse, summary="List available models")
 async def list_models(catalog: ModelCatalogDep, settings: SettingsDep) -> ModelListResponse:
-    models = list(catalog.list_all())
+    # Public catalog: internal/test providers (mock) are never exposed to clients.
+    models = list(catalog.list_all(include_internal=False))
     models.sort(key=lambda model: model.key != settings.models.default_model)
+    if any(model.key == settings.models.default_model for model in models):
+        public_default = settings.models.default_model
+    elif models:
+        public_default = models[0].key
+    else:
+        public_default = ""
     return ModelListResponse(
-        default_model=settings.models.default_model,
+        default_model=public_default,
         data=[
             ModelInfo(
                 key=model.key,

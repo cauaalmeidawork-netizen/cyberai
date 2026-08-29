@@ -1,14 +1,12 @@
 "use client";
 
-import { memo, useState, useRef } from "react";
-import { Check, Copy } from "lucide-react";
+import { memo } from "react";
 
 import { createCodePlugin } from "@streamdown/code";
 import { Streamdown, type CodeHighlighterPlugin } from "streamdown";
 
 import type { SourceCitation } from "@/types/api";
 import { linkifyCitations } from "../lib/citations";
-import { cn } from "@/lib/utils";
 
 const codePlugin = createCodePlugin({
   themes: ["github-dark", "github-dark"],
@@ -46,9 +44,6 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
         onLinkCheck: isSafeExternalUrl,
       }}
       components={{
-        pre: ({ children, ...props }) => {
-          return <PreComponent {...props}>{children}</PreComponent>;
-        },
         a: ({ node, href, children, ...props }) => {
           if (href?.startsWith("#citation-")) {
             const index = Number(href.slice("#citation-".length));
@@ -82,44 +77,3 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
     </Streamdown>
   );
 });
-
-function PreComponent({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) {
-  const [copied, setCopied] = useState(false);
-  const preRef = useRef<HTMLPreElement>(null);
-
-  const copy = async () => {
-    if (!preRef.current) return;
-    try {
-      await navigator.clipboard.writeText(preRef.current.textContent || "");
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
-
-  const language = (props as any)["data-language"] || "Code";
-
-  return (
-    <div className="group relative my-5 overflow-hidden rounded-[14px] border border-subtle bg-background-deep shadow-sm">
-      <div className="flex items-center justify-between bg-surface-1 px-4 py-2 border-b border-subtle">
-        <span className="text-[11px] font-mono font-medium text-foreground-muted uppercase tracking-wider">
-          {language}
-        </span>
-        <button
-          type="button"
-          onClick={copy}
-          className="flex items-center gap-1.5 rounded text-[11px] font-medium text-foreground-muted hover:text-foreground transition-colors duration-fast"
-        >
-          {copied ? <Check size={13} className="text-accent" /> : <Copy size={13} />}
-          {copied ? "Copiado" : "Copiar"}
-        </button>
-      </div>
-      <pre
-        {...props}
-        ref={preRef}
-        className={cn(props.className, "p-4 text-[13.5px] overflow-x-auto bg-transparent")}
-      >
-        {children}
-      </pre>
-    </div>
-  );
-}

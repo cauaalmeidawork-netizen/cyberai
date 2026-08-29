@@ -16,7 +16,7 @@ export function AppShell() {
 
   useEffect(() => {
     function handleResize() {
-      if (window.innerWidth < 640) {
+      if (window.innerWidth < 1024) {
         chat.closeSidebar();
       }
     }
@@ -78,6 +78,7 @@ export function AppShell() {
         onNew={() => void chat.newConversation()}
         onRename={(id, title) => void chat.renameConversation(id, title)}
         onDelete={(id) => void chat.deleteConversation(id)}
+        onOpenSettings={chat.openSettings}
         onClose={chat.closeSidebar}
       />
 
@@ -119,7 +120,7 @@ export function AppShell() {
 
       <div
         className={cn(
-          "fixed inset-0 z-[calc(var(--z-sidebar)-1)] bg-black/50 backdrop-blur-sm transition-opacity duration-base sm:hidden",
+          "fixed inset-0 z-[calc(var(--z-sidebar)-1)] bg-black/50 backdrop-blur-sm transition-opacity duration-base lg:hidden",
           chat.sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={chat.closeSidebar}

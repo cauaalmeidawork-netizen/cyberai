@@ -104,15 +104,21 @@ class ModelCatalog:
         return key in self._models
 
     def list_all(
-        self, *, include_unavailable: bool = False, include_internal: bool = False
+        self, *, include_unavailable: bool = False, include_internal: bool = True
     ) -> tuple[ModelSpec, ...]:
-        models = self._models.values()
+        """List catalog models.
+
+        Internal/test providers (mock) are part of the catalog by default —
+        internal routing depends on them in local and CI environments. Public
+        surfaces (the client-facing model list) must pass ``include_internal=False``.
+        """
+        models: Iterator[ModelSpec] = iter(self._models.values())
 
         # Filter by availability
         if not include_unavailable:
             models = (model for model in models if model.is_available)
 
-        # Filter out internal/test providers (mock) unless explicitly requested
+        # Filter out internal/test providers (mock) when explicitly requested
         if not include_internal:
             models = (model for model in models if model.provider != "mock")
 

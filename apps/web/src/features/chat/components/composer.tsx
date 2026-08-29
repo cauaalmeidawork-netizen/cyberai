@@ -63,7 +63,7 @@ export function Composer({
           event.preventDefault();
           if (canSend) onSend();
         }}
-        className="relative flex w-full max-w-composer flex-col rounded-2xl border border-subtle bg-surface-1 shadow-[0_8px_40px_rgba(0,0,0,0.35)] transition-colors duration-base focus-within:border-strong"
+        className="relative flex w-full max-w-composer flex-col rounded-2xl border border-subtle bg-surface-1 shadow-[0_4px_24px_rgba(0,0,0,0.28)] transition-colors duration-base hover:border-strong/60 focus-within:border-accent/40 focus-within:hover:border-accent/40"
       >
         {attachments.length > 0 ? (
           <div className="flex flex-wrap gap-2 px-4 pt-3">
@@ -88,27 +88,18 @@ export function Composer({
           </div>
         ) : null}
 
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Pergunte ao Nomercy"
-          disabled={disabled}
-          rows={1}
-          className="max-h-40 min-h-[52px] w-full resize-none bg-transparent px-4 pb-2 pt-3.5 text-[15px] leading-relaxed text-foreground placeholder:text-foreground-faint focus:outline-none disabled:opacity-50"
-        />
-
-        <div className="flex items-center gap-1.5 px-3 pb-2.5">
-          <button
-            type="button"
-            title="Anexar arquivo"
-            aria-label="Anexar arquivo"
-            onClick={() => fileInputRef.current?.click()}
-            className="grid size-8 place-items-center rounded-lg text-foreground-faint transition-colors duration-fast hover:bg-surface-hover hover:text-foreground active:scale-95"
-          >
-            <Plus size={16} aria-hidden />
-          </button>
+        <div className="flex items-end gap-1 px-2 py-2">
+          <div className="flex h-10 shrink-0 items-center">
+            <button
+              type="button"
+              title="Anexar arquivo"
+              aria-label="Anexar arquivo"
+              onClick={() => fileInputRef.current?.click()}
+              className="grid size-8 place-items-center rounded-lg text-foreground-faint transition-colors duration-fast hover:bg-surface-hover hover:text-foreground active:scale-95"
+            >
+              <Plus size={16} aria-hidden />
+            </button>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -123,7 +114,18 @@ export function Composer({
             accept=".txt,.md,.markdown,.json,.csv,.log,.yaml,.yml,.toml,.ini,.conf,.cfg,.xml,.sql,.py,.js,.ts,.tsx,.jsx,.go,.rs,.c,.h,.cpp,.hpp,.java,.kt,.rb,.php,.sh,.ps1,.html,.css"
           />
 
-          <div className="ml-auto flex items-center gap-2">
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Pergunte ao Nomercy"
+            disabled={disabled}
+            rows={1}
+            className="max-h-40 min-h-[40px] w-full min-w-0 flex-1 resize-none bg-transparent py-[9px] text-[15px] leading-[22px] text-foreground placeholder:text-foreground-faint focus:outline-none disabled:opacity-50"
+          />
+
+          <div className="flex h-10 shrink-0 items-center gap-1.5 pr-1">
             <ModelPicker models={models} value={selectedModel} onChange={onSelectModel} />
             {isSending ? (
               <button

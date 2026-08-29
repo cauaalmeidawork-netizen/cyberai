@@ -21,6 +21,8 @@
   /* Borders */
   --border-subtle: oklch(0.27 0.015 262 / 0.4);
   --border-strong: oklch(0.36 0.02 262);
+  /* Hairline: structural separators that must not read as outlines */
+  --border-hairline: oklch(0.27 0.015 262 / 0.22);
 
   /* Text */
   --foreground: oklch(0.93 0.006 260);
@@ -359,11 +361,22 @@ textarea {
   background: var(--accent-muted);
 }
 
-/* Pending dots animation */
+/* Pending dots: quiet opacity breathing, no bouncing. */
+@keyframes dot-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 .dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--foreground-faint);
+  animation: dot-breathe 1.4s ease-in-out infinite;
 }

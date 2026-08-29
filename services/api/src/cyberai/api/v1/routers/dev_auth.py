@@ -27,6 +27,7 @@ router = APIRouter(tags=["auth"], prefix="/auth")
 
 _CSRF_COOKIE_NAME = "cyberai_csrf"
 _LOCAL_ORG_SLUG = "local-dev"
+_LEGACY_ORG_DISPLAY_NAME = "CyberAI Local"
 _LOCAL_IDENTITY_ID = "local-dev"
 _LOCAL_IDENTITY_ISSUER = "local"
 _LOCAL_IDENTITY_SUBJECT = "local-dev"
@@ -54,6 +55,10 @@ async def dev_login(
             )
             session.add(organization)
             await session.flush()
+        elif organization.display_name == _LEGACY_ORG_DISPLAY_NAME:
+            # Idempotent rename of the pre-rebrand local organization; keeps IDs.
+            organization.display_name = "Nomercy Local"
+            session.add(organization)
         org_id = organization.id
 
     async with db.session(TenantContext(org_id=org_id)) as session:

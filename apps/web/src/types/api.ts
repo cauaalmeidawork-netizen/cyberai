@@ -133,6 +133,8 @@ export interface AuthMe {
   membership_id: string | null;
   role: string;
   permissions: string[];
+  user_display_name?: string | null;
+  user_email?: string | null;
   organizations: OrganizationMembership[];
 }
 

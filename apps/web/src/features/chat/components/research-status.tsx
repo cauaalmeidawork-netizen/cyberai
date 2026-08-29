@@ -4,7 +4,6 @@ import { Search } from "lucide-react";
 
 export function ResearchStatus({
   status,
-  providers,
 }: {
   status: "searching" | "done" | null | undefined;
   providers?: string[];
@@ -13,10 +12,7 @@ export function ResearchStatus({
     return null;
   }
 
-  const label =
-    providers && providers.length > 0
-      ? `Consultando ${providers.slice(0, 3).join(", ")}${providers.length > 3 ? "…" : ""}…`
-      : "Pesquisando fontes…";
+  const label = "Consultando fontes…";
 
   return (
     <div className="mb-3 flex items-center gap-2 text-xs text-foreground-muted" role="status">

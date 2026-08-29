@@ -39,7 +39,7 @@ export function ModelPicker({
         className={cn(
           "inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-foreground-muted transition-colors duration-fast",
           isInteractive && "hover:bg-surface-hover hover:text-foreground",
-          !isInteractive && "cursor-default"
+          !isInteractive && "cursor-default max-sm:hidden",
         )}
         aria-haspopup={isInteractive ? "listbox" : undefined}
         aria-expanded={isInteractive ? open : undefined}

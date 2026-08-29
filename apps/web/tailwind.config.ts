@@ -54,6 +54,7 @@ const config: Config = {
           DEFAULT: "var(--border-subtle)",
           subtle: "var(--border-subtle)",
           strong: "var(--border-strong)",
+          hairline: "var(--border-hairline)",
         },
         input: "var(--input)",
         ring: "var(--ring)",
@@ -75,6 +76,15 @@ const config: Config = {
         fast: "var(--duration-fast)",
         base: "var(--duration-base)",
         slow: "var(--duration-slow)",
+      },
+      keyframes: {
+        "sheet-in": {
+          from: { transform: "translateX(24px)", opacity: "0" },
+          to: { transform: "translateX(0)", opacity: "1" },
+        },
+      },
+      animation: {
+        "sheet-in": "sheet-in 180ms cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },

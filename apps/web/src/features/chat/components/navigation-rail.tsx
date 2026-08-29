@@ -3,6 +3,46 @@
 import { PanelLeft, Plus, Settings } from "lucide-react";
 
 import { NomercyMark } from "./mark";
+import { cn } from "@/lib/utils";
+
+function RailButton({
+  label,
+  title,
+  onClick,
+  active,
+  children,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative flex w-full justify-center">
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-r-full bg-accent"
+        />
+      ) : null}
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        aria-label={label}
+        className={cn(
+          "grid size-9 place-items-center rounded-lg transition-colors duration-fast active:scale-95",
+          active
+            ? "text-foreground"
+            : "text-foreground-muted hover:bg-surface-hover hover:text-foreground",
+        )}
+      >
+        {children}
+      </button>
+    </div>
+  );
+}
 
 export function NavigationRail({
   sidebarOpen,
@@ -18,45 +58,29 @@ export function NavigationRail({
   return (
     <nav
       aria-label="Navegação principal"
-      className="z-[var(--z-rail)] hidden h-full w-[56px] shrink-0 flex-col items-center gap-2 border-r border-subtle bg-background-deep/40 py-4 sm:flex"
+      className="z-[var(--z-rail)] hidden h-full w-[56px] shrink-0 flex-col items-center gap-1.5 border-r border-hairline bg-background-deep/60 py-3 backdrop-blur-sm lg:flex"
     >
-      <div className="mb-2 grid size-9 place-items-center">
-        <NomercyMark className="size-5 text-accent" />
+      <div className="mb-1.5 grid size-9 place-items-center">
+        <NomercyMark className="size-[18px] text-accent" />
       </div>
 
-      <button
-        type="button"
-        onClick={onNewConversation}
-        title="Nova conversa"
-        aria-label="Nova conversa"
-        className="group relative grid size-9 place-items-center rounded-lg text-foreground-muted transition-colors duration-fast hover:bg-surface-hover hover:text-foreground active:scale-95"
-      >
+      <RailButton label="Nova conversa" title="Nova conversa" onClick={onNewConversation}>
         <Plus size={18} aria-hidden />
-      </button>
+      </RailButton>
 
-      <button
-        type="button"
+      <RailButton
+        label={sidebarOpen ? "Fechar histórico" : "Abrir histórico"}
+        title="Histórico e busca"
         onClick={onToggleSidebar}
-        title="Histórico e Busca"
-        aria-label={sidebarOpen ? "Fechar histórico" : "Abrir histórico"}
-        className="group relative grid size-9 place-items-center rounded-lg text-foreground-muted transition-colors duration-fast hover:bg-surface-hover hover:text-foreground active:scale-95"
+        active={sidebarOpen}
       >
         <PanelLeft size={18} aria-hidden />
-        {sidebarOpen && (
-          <span className="absolute -left-3 top-1/2 h-4 w-1 -translate-y-1/2 rounded-r-md bg-accent" />
-        )}
-      </button>
+      </RailButton>
 
-      <div className="mt-auto flex flex-col items-center gap-2">
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          title="Configurações"
-          aria-label="Configurações"
-          className="grid size-9 place-items-center rounded-lg text-foreground-muted transition-colors duration-fast hover:bg-surface-hover hover:text-foreground active:scale-95"
-        >
+      <div className="mt-auto flex w-full flex-col items-center gap-1.5">
+        <RailButton label="Configurações" title="Configurações" onClick={onOpenSettings}>
           <Settings size={18} aria-hidden />
-        </button>
+        </RailButton>
       </div>
     </nav>
   );

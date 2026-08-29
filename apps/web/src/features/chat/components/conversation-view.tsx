@@ -58,7 +58,7 @@ export function ConversationView({
           onClick={onOpenMobileMenu}
           title="Menu"
           aria-label="Abrir menu"
-          className="grid size-8 place-items-center rounded-lg text-foreground-faint transition-colors duration-fast hover:text-foreground sm:hidden"
+          className="grid size-8 place-items-center rounded-lg text-foreground-faint transition-colors duration-fast hover:text-foreground lg:hidden"
         >
           <Menu size={17} aria-hidden />
         </button>
