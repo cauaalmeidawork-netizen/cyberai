@@ -59,14 +59,14 @@ export function ConversationSidebar({
       aria-label="Histórico de conversas"
       inert={!open}
       className={cn(
-        "z-[var(--z-sidebar)] flex h-[100dvh] w-[var(--sidebar-width)] shrink-0 flex-col bg-background-deep/60 backdrop-blur-sm",
-        "max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-base max-lg:ease-out",
+        "z-[var(--z-sidebar)] flex h-[100dvh] w-[var(--sidebar-width)] shrink-0 flex-col bg-surface-1",
+        "max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:bg-background-deep max-lg:shadow-[0_0_60px_rgba(0,0,0,0.55)] max-lg:transition-transform max-lg:duration-base max-lg:ease-out",
         open ? "max-lg:translate-x-0" : "max-lg:-translate-x-full lg:hidden",
       )}
     >
       {/* Brand header — only visible on mobile where rail is hidden */}
       <div className="flex items-center gap-2.5 px-4 pb-1 pt-4 lg:hidden">
-        <NomercyMark className="size-5 text-accent" />
+        <NomercyMark className="size-5 text-foreground-strong" />
         <span className="text-[13px] font-semibold tracking-tight text-foreground">Nomercy AI</span>
         <button
           type="button"
@@ -83,14 +83,14 @@ export function ConversationSidebar({
       <button
         type="button"
         onClick={onNew}
-        className="mx-3 mb-1 mt-3 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-foreground transition-colors duration-fast hover:bg-surface-hover"
+        className="mx-3 mb-1 mt-3.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-foreground transition-colors duration-fast hover:bg-surface-hover"
       >
         <Plus size={15} aria-hidden className="text-foreground-muted" />
         Nova conversa
       </button>
 
-      {/* Search — quiet field; placeholder must never clip */}
-      <div className="mx-3 mb-2 mt-1 flex items-center gap-2 rounded-[10px] border border-transparent px-2.5 transition-colors duration-fast focus-within:border-hairline focus-within:bg-surface-1 hover:bg-surface-hover/40">
+      {/* Search — tonal field, no visible outline */}
+      <div className="mx-3 mb-2 mt-1 flex items-center gap-2 rounded-[10px] bg-background px-2.5 transition-colors duration-fast hover:bg-background">
         <Search size={13} aria-hidden className="shrink-0 text-foreground-faint" />
         <input
           value={query}
@@ -110,7 +110,7 @@ export function ConversationSidebar({
         ) : (
           groups.map((group) => (
             <div key={group.label} className="mb-2">
-              <p className="px-3 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground-faint/60">
+              <p className="px-3 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground-faint">
                 {group.label}
               </p>
               <ul className="grid gap-px">
@@ -141,8 +141,8 @@ export function ConversationSidebar({
                         className={cn(
                           "w-full truncate rounded-lg px-2.5 py-1.5 pr-8 text-left text-[13px] transition-colors duration-fast",
                           isSelected
-                            ? "bg-surface-hover/70 text-foreground"
-                            : "text-foreground-muted hover:bg-surface-hover/40 hover:text-foreground",
+                            ? "bg-surface-hover text-foreground"
+                            : "text-foreground-muted hover:bg-surface-hover hover:text-foreground",
                         )}
                       >
                         {conversation.title}
@@ -157,7 +157,7 @@ export function ConversationSidebar({
                         <MoreHorizontal size={13} aria-hidden />
                       </button>
                       {menuFor === conversation.id ? (
-                        <div className="absolute right-1 top-full z-20 mt-0.5 w-36 overflow-hidden rounded-lg border border-subtle bg-surface-2 p-1 shadow-lg">
+                        <div className="absolute right-1 top-full z-20 mt-0.5 w-36 overflow-hidden rounded-lg bg-surface-2 p-1 shadow-[0_10px_36px_rgba(0,0,0,0.5)]">
                           <button
                             type="button"
                             onClick={() => startRename(conversation)}
@@ -187,7 +187,7 @@ export function ConversationSidebar({
         )}
       </div>
 
-      <div className="border-t border-hairline p-2 lg:hidden">
+      <div className="p-2 lg:hidden">
         <button
           type="button"
           onClick={() => {

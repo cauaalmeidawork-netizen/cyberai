@@ -10,19 +10,19 @@
    ============================================================================= */
 
 :root {
-  /* Surfaces */
-  --background: oklch(0.145 0.012 262);
-  --background-deep: oklch(0.12 0.01 262);
-  --surface-1: oklch(0.18 0.013 262);
-  --surface-2: oklch(0.22 0.014 262);
-  --surface-hover: oklch(0.24 0.015 262 / 0.7);
-  --surface-raised: oklch(0.2 0.014 262);
+  /* Surfaces — a tight tonal ramp; separation comes from tone, not lines */
+  --background: oklch(0.138 0.011 262);
+  --background-deep: oklch(0.115 0.01 262);
+  --surface-1: oklch(0.165 0.012 262);
+  --surface-2: oklch(0.2 0.013 262);
+  --surface-hover: oklch(0.23 0.014 262 / 0.6);
+  --surface-raised: oklch(0.19 0.013 262);
 
-  /* Borders */
-  --border-subtle: oklch(0.27 0.015 262 / 0.4);
-  --border-strong: oklch(0.36 0.02 262);
+  /* Borders — all extremely low contrast; regions separate by tone + depth */
+  --border-subtle: oklch(0.28 0.015 262 / 0.32);
+  --border-strong: oklch(0.38 0.02 262 / 0.7);
   /* Hairline: structural separators that must not read as outlines */
-  --border-hairline: oklch(0.27 0.015 262 / 0.22);
+  --border-hairline: oklch(0.28 0.015 262 / 0.15);
 
   /* Text */
   --foreground: oklch(0.93 0.006 260);
@@ -82,10 +82,10 @@
   --z-toast: 70;
 
   /* Layout */
-  --rail-width: 56px;
-  --sidebar-width: 272px;
-  --content-max: 860px;
-  --composer-max: 900px;
+  --rail-width: 60px;
+  --sidebar-width: 268px;
+  --content-max: 840px;
+  --composer-max: 860px;
 }
 
 html,
@@ -112,18 +112,18 @@ body {
   pointer-events: none;
   background:
     radial-gradient(
-      1200px 800px at 50% -20%,
-      oklch(0.24 0.04 275 / 0.06),
+      1300px 700px at 42% -18%,
+      oklch(0.25 0.045 275 / 0.07),
       transparent 70%
     ),
     radial-gradient(
-      1000px 600px at 80% 120%,
-      oklch(0.20 0.05 310 / 0.05),
+      1100px 620px at 88% 125%,
+      oklch(0.21 0.05 310 / 0.055),
       transparent 65%
     ),
     radial-gradient(
-      600px 400px at 15% 90%,
-      oklch(0.585 0.215 25 / 0.02),
+      700px 420px at 10% 92%,
+      oklch(0.585 0.215 25 / 0.025),
       transparent 50%
     ),
     var(--background);

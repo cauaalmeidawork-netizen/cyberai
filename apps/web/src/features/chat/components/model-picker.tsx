@@ -37,14 +37,20 @@ export function ModelPicker({
         }}
         disabled={!isInteractive}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] text-foreground-muted transition-colors duration-fast",
-          isInteractive && "hover:bg-surface-hover hover:text-foreground",
-          !isInteractive && "cursor-default max-sm:hidden",
+          "inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] transition-colors duration-fast",
+          isInteractive
+            ? "text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+            : "cursor-default text-foreground-faint max-sm:hidden",
         )}
         aria-haspopup={isInteractive ? "listbox" : undefined}
         aria-expanded={isInteractive ? open : undefined}
       >
-        <span className="max-w-[140px] truncate">{selected?.display_name ?? "Modelo"}</span>
+        <span className="max-w-[140px] truncate">
+          {selected?.display_name ?? "Modelo"}
+          {!isInteractive && selected?.display_name ? (
+            <span className="text-foreground-faint"> · Local</span>
+          ) : null}
+        </span>
         {isInteractive && (
           <ChevronDown
             size={13}
@@ -57,7 +63,7 @@ export function ModelPicker({
       {open && isInteractive ? (
         <ul
           role="listbox"
-          className="absolute bottom-full right-0 z-50 mb-2 min-w-[180px] overflow-hidden rounded-[14px] border border-subtle bg-surface-2 p-1.5 shadow-[0_8px_40px_rgba(0,0,0,0.4)]"
+          className="absolute bottom-full right-0 z-50 mb-2 min-w-[180px] overflow-hidden rounded-[14px] bg-surface-2 p-1.5 shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
         >
           {models.map((model) => (
             <li key={model.key}>

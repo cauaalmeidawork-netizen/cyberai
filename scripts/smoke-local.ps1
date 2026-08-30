@@ -24,8 +24,8 @@ $health = Invoke-RestMethod -Uri "http://localhost:8001/healthz" -TimeoutSec 5
 Assert-True ($health.status -eq "ok") "API healthz failed."
 
 $ollamaModels = Invoke-RestMethod -Uri "http://127.0.0.1:11434/v1/models" -TimeoutSec 5
-$hasQwen = @($ollamaModels.data | Where-Object { $_.id -eq "qwen2.5:3b" }).Count -gt 0
-Assert-True $hasQwen "qwen2.5:3b not found in Ollama models."
+$hasDolphin = @($ollamaModels.data | Where-Object { $_.id -eq "dolphin3:8b" }).Count -gt 0
+Assert-True $hasDolphin "dolphin3:8b not found in Ollama models."
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -38,12 +38,12 @@ Assert-True ($me.role -eq "owner") "Local auth role was not owner."
 
 $models = Invoke-RestMethod -Uri "http://localhost:3000/api/v1/models" -TimeoutSec 10
 Assert-True ($models.default_model -eq "openai-compatible-chat") "Unexpected default model."
-$qwen = @(
+$dolphin = @(
     $models.data | Where-Object {
-        $_.key -eq "openai-compatible-chat" -and $_.display_name -eq "Qwen 2.5 3B Local"
+        $_.key -eq "openai-compatible-chat" -and $_.display_name -eq "Dolphin 3 8B"
     }
 )
-Assert-True ($qwen.Count -gt 0) "Qwen local model display not found."
+Assert-True ($dolphin.Count -gt 0) "Dolphin local model display not found."
 
 $csrfLine = Get-Content $CookieJar | Where-Object { $_ -match "cyberai_csrf" } | Select-Object -Last 1
 $csrf = ($csrfLine -split "`t")[-1]
@@ -87,9 +87,12 @@ try {
     # ── Send test message ──────────────────────────────────────────────────────
 
     $payload = @{
-        messages = @(@{ role = "user"; content = "Responda apenas: NOMERCY_LOCAL_OK" })
+        messages = @(@{
+            role = "user"
+            content = "Comece com o marcador exato NMAP_SV_OK. Depois explique em uma frase o que faz nmap -sV."
+        })
         model = "openai-compatible-chat"
-        max_tokens = 64
+        max_tokens = 96
         temperature = 0.0
         rag_enabled = $false
     } | ConvertTo-Json -Depth 10 -Compress
@@ -124,7 +127,16 @@ try {
     }
 
     $responseText = Get-StreamTextDelta $streamText
-    Assert-True ($responseText -match "NOMERCY_LOCAL_OK") "Expected model response marker not found."
+    if (-not ($responseText -match "NMAP_SV_OK")) {
+        Write-Host "[smoke] Unexpected model response: $responseText"
+    }
+    Assert-True ($responseText -match "NMAP_SV_OK") "Expected legitimate cybersecurity response marker not found."
+    Assert-True (($responseText -match "(?i)-sV") -and ($responseText -match "(?i)servi|vers.o")) `
+        "Expected a substantive explanation of nmap -sV."
+    Assert-True (-not ($streamText -match "(?i)policy_denied|blocked by security policy|bloquead[oa] pela pol.tica")) `
+        "Legitimate cybersecurity prompt was blocked by policy."
+    Assert-True (-not ($responseText -match "(?i)n.o posso ajudar|cannot assist|can't assist|i can't help|recuso")) `
+        "Local model returned a generic refusal for a legitimate cybersecurity prompt."
     Assert-True (-not ($streamText -match "MockModelProvider|mock-analyst")) "Stream indicates mock provider/model."
 
     # ── Verify usage record ────────────────────────────────────────────────────
@@ -132,18 +144,18 @@ try {
     $usage = docker exec cyberai-postgres psql -U cyberai -d cyberai -tA -c `
         "SELECT provider || '|' || model_key || '|' || provider_model FROM usage_records ORDER BY occurred_at DESC LIMIT 1;"
     $usage = $usage.Trim()
-    Assert-True ($usage -eq "openai-compatible|openai-compatible-chat|qwen2.5:3b") `
+    Assert-True ($usage -eq "openai-compatible|openai-compatible-chat|dolphin3:8b") `
         "Unexpected latest usage provider/model: $usage"
 
     [pscustomobject]@{
         api_health = $health.status
         model = $models.default_model
-        display = $qwen[0].display_name
+        display = $dolphin[0].display_name
         auth_role = $me.role
         project = $project.name
         conversation = $conversation.title
         provider_usage = $usage
-        response_marker = "NOMERCY_LOCAL_OK"
+        response_marker = "NMAP_SV_OK"
     } | ConvertTo-Json -Compress
 
 } finally {

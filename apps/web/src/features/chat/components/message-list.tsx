@@ -96,7 +96,7 @@ export function MessageList({
         onClick={() => scrollToBottom("smooth")}
         aria-label="Rolar para o final"
         className={cn(
-          "absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full border border-subtle bg-surface-2 text-foreground shadow-lg transition-all duration-base",
+          "absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-surface-2 text-foreground shadow-[0_6px_24px_rgba(0,0,0,0.4)] transition-all duration-base",
           nearBottom ? "pointer-events-none translate-y-2 opacity-0" : "opacity-100",
         )}
       >

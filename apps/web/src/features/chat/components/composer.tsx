@@ -63,14 +63,14 @@ export function Composer({
           event.preventDefault();
           if (canSend) onSend();
         }}
-        className="relative flex w-full max-w-composer flex-col rounded-2xl border border-subtle bg-surface-1 shadow-[0_4px_24px_rgba(0,0,0,0.28)] transition-colors duration-base hover:border-strong/60 focus-within:border-accent/40 focus-within:hover:border-accent/40"
+        className="relative flex w-full max-w-composer flex-col rounded-[16px] bg-surface-raised shadow-[0_2px_20px_rgba(0,0,0,0.34),0_0_0_1px_oklch(0.28_0.015_262/0.2)]"
       >
         {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-2 px-4 pt-3">
+          <div className="flex flex-wrap gap-2 px-3.5 pt-3">
             {attachments.map((attachment) => (
               <span
                 key={attachment.id}
-                className="inline-flex items-center gap-1.5 rounded-md border border-subtle bg-surface-2 px-2 py-1 text-xs text-foreground-muted"
+                className="inline-flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1 text-xs text-foreground-muted"
               >
                 <FileText size={13} aria-hidden className="text-foreground-faint" />
                 <span className="max-w-[180px] truncate">{attachment.name}</span>
@@ -125,7 +125,7 @@ export function Composer({
             className="max-h-40 min-h-[40px] w-full min-w-0 flex-1 resize-none bg-transparent py-[9px] text-[15px] leading-[22px] text-foreground placeholder:text-foreground-faint focus:outline-none disabled:opacity-50"
           />
 
-          <div className="flex h-10 shrink-0 items-center gap-1.5 pr-1">
+          <div className="flex h-10 shrink-0 items-center gap-1 pr-1">
             <ModelPicker models={models} value={selectedModel} onChange={onSelectModel} />
             {isSending ? (
               <button
@@ -133,9 +133,9 @@ export function Composer({
                 onClick={onStop}
                 title="Parar geração"
                 aria-label="Parar geração"
-                className="grid size-8 place-items-center rounded-lg border border-subtle bg-surface-2 text-foreground transition-all duration-fast hover:border-strong active:scale-95"
+                className="grid size-8 place-items-center rounded-[10px] bg-surface-2 text-foreground transition-all duration-fast hover:bg-surface-hover active:scale-95"
               >
-                <Square size={12} aria-hidden />
+                <Square size={11} aria-hidden />
               </button>
             ) : (
               <button
@@ -144,10 +144,10 @@ export function Composer({
                 title="Enviar"
                 aria-label="Enviar mensagem"
                 className={cn(
-                  "grid size-8 place-items-center rounded-lg transition-all duration-fast active:scale-95",
+                  "grid size-8 place-items-center rounded-[10px] transition-all duration-fast active:scale-95",
                   canSend
-                    ? "bg-accent text-accent-foreground hover:bg-accent-hover shadow-[0_0_12px_oklch(0.585_0.215_25/0.4)]"
-                    : "bg-surface-2 text-foreground-faint",
+                    ? "bg-accent text-accent-foreground hover:bg-accent-hover shadow-[0_0_14px_oklch(0.585_0.215_25/0.35)]"
+                    : "text-foreground-faint",
                 )}
               >
                 <ArrowUp size={15} aria-hidden />

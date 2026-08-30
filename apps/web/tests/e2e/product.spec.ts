@@ -86,7 +86,7 @@ async function mockApi(
           data: [
             {
               key: "openai-compatible-chat",
-              display_name: "Qwen 2.5 3B Local",
+              display_name: "Dolphin 3 8B",
               description: "Local Ollama model",
               context_window: 32768,
               max_output_tokens: 2048,
@@ -259,6 +259,8 @@ test("desktop flow: home, send, stream, sidebar", async ({ page }, testInfo) => 
   await send(page, "Como identificar serviços com nmap?");
 
   await expect(page.getByText(/nmap -sV/)).toBeVisible();
+  await expect(page.locator('[data-streamdown="code-block-header"]')).toContainText("bash");
+  await expect(page.locator("pre")).toContainText("nmap -sV");
   await page.screenshot({ path: testInfo.outputPath("code-block.png") });
 
   await page.getByRole("button", { name: "Nova conversa" }).first().click();

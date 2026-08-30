@@ -109,7 +109,7 @@ export function SettingsSheet({
         aria-modal="true"
         aria-label="Configurações"
         onClick={(event) => event.stopPropagation()}
-        className="animate-sheet-in flex h-full w-full max-w-[420px] flex-col border-l border-hairline bg-background-deep shadow-2xl"
+        className="animate-sheet-in flex h-full w-full max-w-[400px] flex-col bg-background-deep shadow-[-24px_0_60px_rgba(0,0,0,0.45)]"
       >
         <div className="flex items-center gap-2 px-5 py-3.5">
           <NomercyMark className="size-[18px] text-accent" />
@@ -127,7 +127,7 @@ export function SettingsSheet({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
           {/* Conta */}
-          <section className="border-b border-hairline py-5">
+          <section className="border-b border-hairline py-6">
             <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.12em] text-foreground-faint">
               Conta
             </h3>
@@ -152,7 +152,7 @@ export function SettingsSheet({
           </section>
 
           {/* Plano */}
-          <section className="border-b border-hairline py-5">
+          <section className="border-b border-hairline py-6">
             <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.12em] text-foreground-faint">
               Plano
             </h3>
@@ -208,7 +208,7 @@ export function SettingsSheet({
           </section>
 
           {/* Sobre */}
-          <section className="py-5">
+          <section className="py-6">
             <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.12em] text-foreground-faint">
               Sobre
             </h3>

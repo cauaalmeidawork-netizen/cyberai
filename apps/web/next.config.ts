@@ -8,6 +8,7 @@ const apiProxyTarget =
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  devIndicators: false,
   async rewrites() {
     return [
       {

@@ -64,7 +64,7 @@ async function mockCleanApi(page: Page) {
           data: [
             {
               key: "openai-compatible-chat",
-              display_name: "Qwen 2.5 3B Local",
+              display_name: "Dolphin 3 8B",
               description: "Local Ollama model",
               context_window: 32768,
               max_output_tokens: 2048,

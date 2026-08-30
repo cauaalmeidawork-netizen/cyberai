@@ -2,7 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ModulePath = Join-Path $PSScriptRoot "local-process.ps1"
+$EnvModulePath = Join-Path $PSScriptRoot "local-env.ps1"
 . $ModulePath
+. $EnvModulePath
 
 function Assert-True([bool] $Condition, [string] $Message) {
     if (-not $Condition) {
@@ -65,5 +67,40 @@ Assert-True ($externalMessage -match "Port 3000 is owned by an external process"
     "Expected external process message to identify the port owner."
 Assert-True ($externalMessage -match "Refusing to terminate it") `
     "Expected external process message to refuse termination."
+
+$envTestDirectory = Join-Path `
+    ([System.IO.Path]::GetTempPath()) `
+    ("nomercy-local-env-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $envTestDirectory | Out-Null
+try {
+    $envTestPath = Join-Path $envTestDirectory ".env"
+    @(
+        "CYBERAI_OPENAI_COMPATIBLE__MODEL=legacy-local:3b"
+        "CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME=Legacy Local Model"
+        "CYBERAI_MODELS__DEFAULT_MODEL=mock-analyst-1"
+        "CUSTOM_VALUE=preserved"
+    ) | Set-Content -Encoding utf8 $envTestPath
+
+    Set-LocalApiRuntimeValues -Path $envTestPath
+    $migratedEnv = Get-Content -Raw $envTestPath
+    Assert-True ($migratedEnv -match '(?m)^CYBERAI_OPENAI_COMPATIBLE__MODEL=dolphin3:8b\r?$') `
+        "Expected an existing API .env to migrate to dolphin3:8b."
+    Assert-True ($migratedEnv -match '(?m)^CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME=Dolphin 3 8B\r?$') `
+        "Expected the migrated API .env to display Dolphin 3 8B."
+    Assert-True ($migratedEnv -match '(?m)^CYBERAI_INFERENCE__FIRST_TOKEN_TIMEOUT_SECONDS=120\r?$') `
+        "Expected the migrated API .env to allow enough time for the local 8B model."
+    Assert-True ($migratedEnv -match '(?m)^CYBERAI_APP__REQUEST_TIMEOUT_SECONDS=120\r?$') `
+        "Expected the migrated API .env to keep the global HTTP timeout bounded."
+    Assert-True ($migratedEnv -match '(?m)^CYBERAI_MODELS__DEFAULT_MODEL=openai-compatible-chat\r?$') `
+        "Expected the migrated API .env to select the local provider by default."
+    Assert-True ($migratedEnv -match '(?m)^CUSTOM_VALUE=preserved\r?$') `
+        "Expected API .env migration to preserve unrelated values."
+} finally {
+    $resolvedEnvTestDirectory = (Resolve-Path -LiteralPath $envTestDirectory).Path
+    $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    Assert-True ($resolvedEnvTestDirectory.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)) `
+        "Refusing to remove a test directory outside the system temp directory."
+    Remove-Item -LiteralPath $resolvedEnvTestDirectory -Recurse -Force
+}
 
 Write-Host "[nomercy-local-test] local process helper tests passed."

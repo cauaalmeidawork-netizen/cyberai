@@ -435,7 +435,7 @@ describe("Nomercy AppShell", () => {
             data: [
               {
                 key: "openai-compatible-chat",
-                display_name: "Qwen 2.5 3B",
+                display_name: "Dolphin 3 8B",
                 description: null,
                 context_window: 32768,
                 max_output_tokens: 2048,
@@ -450,7 +450,7 @@ describe("Nomercy AppShell", () => {
 
     render(<AppShell />);
     await screen.findByText("Como posso ajudar?");
-    expect(await screen.findByText("Qwen 2.5 3B")).toBeInTheDocument();
+    expect(await screen.findByText("Dolphin 3 8B")).toBeInTheDocument();
     expect(screen.queryByText(/Mock Analyst/)).not.toBeInTheDocument();
   });
 });
@@ -469,7 +469,7 @@ async function workspaceFetch(input: RequestInfo | URL, init?: RequestInit): Pro
       data: [
         {
           key: "openai-compatible-chat",
-          display_name: "Qwen 2.5 3B Local",
+          display_name: "Dolphin 3 8B",
           description: "Local Ollama model",
           context_window: 32768,
           max_output_tokens: 2048,

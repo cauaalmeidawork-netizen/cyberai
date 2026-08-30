@@ -19,28 +19,20 @@ function RailButton({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex w-full justify-center">
-      {active ? (
-        <span
-          aria-hidden
-          className="absolute left-0 top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-r-full bg-accent"
-        />
-      ) : null}
-      <button
-        type="button"
-        onClick={onClick}
-        title={title}
-        aria-label={label}
-        className={cn(
-          "grid size-9 place-items-center rounded-lg transition-colors duration-fast active:scale-95",
-          active
-            ? "text-foreground"
-            : "text-foreground-muted hover:bg-surface-hover hover:text-foreground",
-        )}
-      >
-        {children}
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={label}
+      className={cn(
+        "grid size-9 place-items-center rounded-[10px] transition-colors duration-fast active:scale-95",
+        active
+          ? "bg-surface-hover text-foreground"
+          : "text-foreground-muted hover:bg-surface-hover hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -58,10 +50,10 @@ export function NavigationRail({
   return (
     <nav
       aria-label="Navegação principal"
-      className="z-[var(--z-rail)] hidden h-full w-[56px] shrink-0 flex-col items-center gap-1.5 border-r border-hairline bg-background-deep/60 py-3 backdrop-blur-sm lg:flex"
+      className="z-[var(--z-rail)] hidden h-full w-[var(--rail-width)] shrink-0 flex-col items-center gap-1 bg-surface-1 py-3.5 lg:flex"
     >
-      <div className="mb-1.5 grid size-9 place-items-center">
-        <NomercyMark className="size-[18px] text-accent" />
+      <div className="mb-2 grid size-9 place-items-center">
+        <NomercyMark className="size-[19px] text-foreground-strong" />
       </div>
 
       <RailButton label="Nova conversa" title="Nova conversa" onClick={onNewConversation}>
@@ -77,7 +69,7 @@ export function NavigationRail({
         <PanelLeft size={18} aria-hidden />
       </RailButton>
 
-      <div className="mt-auto flex w-full flex-col items-center gap-1.5">
+      <div className="mt-auto flex w-full flex-col items-center gap-1">
         <RailButton label="Configurações" title="Configurações" onClick={onOpenSettings}>
           <Settings size={18} aria-hidden />
         </RailButton>

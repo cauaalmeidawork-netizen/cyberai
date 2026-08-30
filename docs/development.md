@@ -3,7 +3,7 @@
 ## Setup
 
 1. Make sure Docker Desktop is running.
-2. Make sure Ollama is running and `qwen2.5:3b` is installed.
+2. Make sure Ollama is running and `dolphin3:8b` is installed.
 3. Start the local stack:
 
 ```bash

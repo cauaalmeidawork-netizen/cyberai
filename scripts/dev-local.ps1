@@ -14,7 +14,9 @@ $WebLog = Join-Path $StateDir "web.log"
 $ApiPidFile = Join-Path $StateDir "api.pid"
 $WebPidFile = Join-Path $StateDir "web.pid"
 $ProcessHelper = Join-Path $PSScriptRoot "local-process.ps1"
+$EnvHelper = Join-Path $PSScriptRoot "local-env.ps1"
 . $ProcessHelper
+. $EnvHelper
 
 function Write-Step([string] $Message) {
     Write-CyberAILocalStep $Message
@@ -43,7 +45,7 @@ function Wait-HttpOk([string] $Url, [int] $TimeoutSeconds) {
 
 function Invoke-OllamaKeepAlive {
     $body = @{
-        model = "qwen2.5:3b"
+        model = "dolphin3:8b"
         prompt = ""
         stream = $false
         keep_alive = "30m"
@@ -54,7 +56,7 @@ function Invoke-OllamaKeepAlive {
         -ContentType "application/json" `
         -Body $body `
         -TimeoutSec 30 | Out-Null
-    Write-Step "Ollama model qwen2.5:3b is loaded with keep_alive=30m."
+    Write-Step "Ollama model dolphin3:8b is loaded with keep_alive=30m."
 }
 
 function New-LocalSecret {
@@ -68,35 +70,10 @@ function New-LocalSecret {
     return -join ($bytes | ForEach-Object { $_.ToString("x2") })
 }
 
-function Set-LocalEnvValue([string] $Path, [string] $Name, [string] $Value) {
-    $line = "$Name=$Value"
-    if (-not (Test-Path $Path)) {
-        Set-Content -NoNewline -Encoding utf8 $Path $line
-        return
-    }
-    $lines = @(Get-Content $Path -ErrorAction SilentlyContinue)
-    $updated = $false
-    $nextLines = $lines | ForEach-Object {
-        if ($_ -match "^$([regex]::Escape($Name))=") {
-            $updated = $true
-            $line
-        } else {
-            $_
-        }
-    }
-    if (-not $updated) {
-        $nextLines += $line
-    }
-    Set-Content -Encoding utf8 $Path $nextLines
-}
-
 function Ensure-ApiEnv {
     $envPath = Join-Path $ApiDir ".env"
     if (Test-Path $envPath) {
-        Set-LocalEnvValue $envPath "CYBERAI_REDIS__URL" "redis://127.0.0.1:6379/0"
-        Set-LocalEnvValue $envPath "CYBERAI_REDIS__SOCKET_TIMEOUT_SECONDS" "0.25"
-        Set-LocalEnvValue $envPath "CYBERAI_REDIS__SOCKET_CONNECT_TIMEOUT_SECONDS" "0.25"
-        Set-LocalEnvValue $envPath "CYBERAI_OPENAI_COMPATIBLE__KEEP_ALIVE" "30m"
+        Set-LocalApiRuntimeValues -Path $envPath
         return
     }
     $sessionSecret = New-LocalSecret
@@ -113,6 +90,8 @@ CYBERAI_REDIS__SOCKET_CONNECT_TIMEOUT_SECONDS=0.25
 CYBERAI_APP__CORS_ORIGINS=["http://localhost:3000"]
 CYBERAI_APP__TRUSTED_HOSTS=["localhost","127.0.0.1","testserver"]
 CYBERAI_APP__EXPOSE_DOCS=true
+CYBERAI_INFERENCE__REQUEST_TIMEOUT_SECONDS=300
+CYBERAI_INFERENCE__FIRST_TOKEN_TIMEOUT_SECONDS=120
 CYBERAI_AUTH__JWT_SECRET=cyberai_dev_jwt_secret_do_not_use_in_prod
 CYBERAI_AUTH__LEGACY_BEARER_ENABLED=true
 CYBERAI_AUTH__OIDC_ENABLED=false
@@ -124,10 +103,11 @@ CYBERAI_AUTH__CSRF_SECRET=$csrfSecret
 CYBERAI_OPENAI_COMPATIBLE__ENABLED=true
 CYBERAI_OPENAI_COMPATIBLE__API_KEY=ollama
 CYBERAI_OPENAI_COMPATIBLE__BASE_URL=http://localhost:11434/v1
-CYBERAI_OPENAI_COMPATIBLE__MODEL=qwen2.5:3b
+CYBERAI_OPENAI_COMPATIBLE__MODEL=dolphin3:8b
 CYBERAI_OPENAI_COMPATIBLE__MODEL_KEY=openai-compatible-chat
-CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME=Qwen 2.5 3B Local
+CYBERAI_OPENAI_COMPATIBLE__DISPLAY_NAME=Dolphin 3 8B
 CYBERAI_OPENAI_COMPATIBLE__KEEP_ALIVE=30m
+CYBERAI_OPENAI_COMPATIBLE__REQUEST_TIMEOUT_SECONDS=300
 CYBERAI_MODELS__DEFAULT_MODEL=openai-compatible-chat
 CYBERAI_MODELS__FALLBACK_MODELS=[]
 CYBERAI_BILLING__ENABLED=true
@@ -203,8 +183,8 @@ try {
 } catch {
     throw "Ollama is not reachable at http://127.0.0.1:11434. Start Ollama before running this script."
 }
-if (-not (@($models.data) | Where-Object { $_.id -eq "qwen2.5:3b" })) {
-    throw "Ollama is reachable, but model qwen2.5:3b is not installed. Run: ollama pull qwen2.5:3b"
+if (-not (@($models.data) | Where-Object { $_.id -eq "dolphin3:8b" })) {
+    throw "Ollama is reachable, but model dolphin3:8b is not installed. Run: ollama pull dolphin3:8b"
 }
 Invoke-OllamaKeepAlive
 
@@ -242,7 +222,7 @@ Write-Step "Starting Next.js on http://localhost:3000."
 Start-LoggedProcess `
     -Name "Next.js" `
     -WorkingDirectory $WebDir `
-    -Command "`$env:API_PROXY_TARGET='http://localhost:8001'; `$env:NEXT_PUBLIC_API_BASE_URL=''; npm run dev -- --webpack --hostname 127.0.0.1 --port 3000" `
+    -Command "`$env:API_PROXY_TARGET='http://localhost:8001'; `$env:NEXT_PUBLIC_API_BASE_URL=''; npm run dev -- --hostname 127.0.0.1 --port 3000" `
     -LogPath $WebLog `
     -PidPath $WebPidFile
 

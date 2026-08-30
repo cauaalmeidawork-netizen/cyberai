@@ -11,7 +11,7 @@ sources and answers with citations — inside a single conversation.
 # 1. Clone and enter the repository
 cd chatbot
 
-# 2. Ensure Docker and Ollama are running, with qwen2.5:3b installed
+# 2. Ensure Docker and Ollama are running, with dolphin3:8b installed
 
 # 3. Start the local stack
 powershell -ExecutionPolicy Bypass -File scripts/dev-local.ps1

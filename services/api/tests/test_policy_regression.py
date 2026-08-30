@@ -22,6 +22,8 @@ from cyberai.modules.policy import (
 )
 
 _LEGITIMATE_QUERIES = [
+    "Explique o que faz nmap -sV",
+    "explique os parâmetros do Nmap",
     "como instalar nmap?",
     "como usar nmap -sV?",
     "o que faz a flag -sS?",
@@ -29,18 +31,27 @@ _LEGITIMATE_QUERIES = [
     "estou num CTF, explique esta vulnerabilidade de buffer overflow",
     "analise este PowerShell para detecção defensiva",
     "o que este malware faz? quero entender o comportamento",
+    "análise de malware em nível técnico: explique este comportamento",
     "como mitigar SQL injection?",
     "explique reverse shell conceitualmente para educação",
     "como fazer port scan autorizado no meu ambiente com nmap",
+    "pentest autorizado: explique a metodologia de reconhecimento",
     "configure um firewall para bloquear tráfego malicioso",
     "explique tcpdump e Wireshark para análise de tráfego",
     "o que é threat hunting e por onde começar",
+    "como fazer threat modeling da minha aplicação",
+    "crie regras Sigma e YARA para detecção de comportamento suspeito",
+    "como fazer hardening de um servidor Linux",
     "como funciona um SIEM e um SOC",
     "analise este log para incident response",
+    "interprete este log e me diga os indicadores de comprometimento",
     "como fazer análise estática de um binário suspeito",
     "o que é uma CVE e como funciona o patching",
     "explique a diferença entre CISA KEV e NVD",
     "como verificar dependências vulneráveis do meu projeto",
+    "explique portas e protocolos comuns em um pentest",
+    "análise de configuração: revise estas regras de firewall",
+    "explique esta técnica de ataque para fins educacionais",
 ]
 
 
@@ -65,7 +76,27 @@ def test_abusive_operational_requests_remain_denied(query: str) -> None:
     assert decision.decision is PolicyDecisionType.DENY, query
 
 
-def _context() -> PolicyContext:
+_LEGITIMATE_OUTPUTS = [
+    (
+        "The `-sV` flag performs service/version detection: it probes open ports "
+        "and fingerprints the listening service to report name and version. Run it "
+        "only against systems you are authorized to scan."
+    ),
+    (
+        "To harden the endpoint, write a Sigma rule that detects suspicious "
+        "PowerShell execution and a YARA rule for the known malware family."
+    ),
+]
+
+
+@pytest.mark.parametrize("output", _LEGITIMATE_OUTPUTS)
+def test_legitimate_defensive_outputs_are_not_denied(output: str) -> None:
+    decision = PolicyEngine().evaluate(_context(PolicyStage.OUTPUT), output)
+    assert decision.decision is PolicyDecisionType.ALLOW, output
+    assert decision.violations == ()
+
+
+def _context(stage: PolicyStage = PolicyStage.INPUT) -> PolicyContext:
     return PolicyContext(
         org_id=str(uuid4()),
         user_id=str(uuid4()),
@@ -76,5 +107,5 @@ def _context() -> PolicyContext:
         source_type="chat",
         action_type=PolicyAction.CHAT,
         policy_profile=PolicyProfile.DEFAULT,
-        stage=PolicyStage.INPUT,
+        stage=stage,
     )

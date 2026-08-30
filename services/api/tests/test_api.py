@@ -70,8 +70,8 @@ async def test_list_models_returns_configured_openai_compatible_default() -> Non
             "enabled": True,
             "api_key": "ollama",
             "base_url": "http://localhost:11434/v1",
-            "model": "qwen2.5:3b",
-            "display_name": "Qwen 2.5 3B Local",
+            "model": "dolphin3:8b",
+            "display_name": "Dolphin 3 8B",
         },
         models={"default_model": "openai-compatible-chat", "fallback_models": []},
     )
@@ -83,7 +83,7 @@ async def test_list_models_returns_configured_openai_compatible_default() -> Non
     body = response.json()
     assert body["default_model"] == "openai-compatible-chat"
     assert body["data"][0]["key"] == "openai-compatible-chat"
-    assert body["data"][0]["display_name"] == "Qwen 2.5 3B Local"
+    assert body["data"][0]["display_name"] == "Dolphin 3 8B"
 
 
 @pytest.mark.asyncio

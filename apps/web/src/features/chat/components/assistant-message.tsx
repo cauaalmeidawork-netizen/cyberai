@@ -91,9 +91,9 @@ function PendingIndicator() {
     <div className="flex items-center gap-2 py-2" aria-label="Gerando resposta">
       <span className="text-[14px] italic text-foreground-faint">Pensando</span>
       <div className="flex items-center gap-1">
-        <span className="dot [animation-delay:0ms] bg-accent/60" />
-        <span className="dot [animation-delay:120ms] bg-accent/60" />
-        <span className="dot [animation-delay:240ms] bg-accent/60" />
+        <span className="dot [animation-delay:0ms] bg-accent" />
+        <span className="dot [animation-delay:120ms] bg-accent" />
+        <span className="dot [animation-delay:240ms] bg-accent" />
       </div>
     </div>
   );

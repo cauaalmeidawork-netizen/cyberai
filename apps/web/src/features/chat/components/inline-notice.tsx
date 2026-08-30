@@ -14,7 +14,7 @@ export function InlineNotice({
   return (
     <div
       role="status"
-      className="flex shrink-0 items-center gap-2.5 border-b border-warning/20 bg-warning/10 px-4 py-2 text-xs text-foreground"
+      className="flex shrink-0 items-center gap-2.5 bg-[oklch(0.76_0.12_75/0.08)] px-4 py-2 text-xs text-foreground"
     >
       <AlertTriangle size={14} aria-hidden className="shrink-0 text-warning" />
       <span className="truncate">{message}</span>
